@@ -33,7 +33,7 @@ func TestGetCPUAffinity(t *testing.T) {
 	// should verify the default cpu affinity
 	fmt.Println(oldaf.ToHumanString())
 
-	af, _ := util.NewBitmap("f")
+	af, _ := util.NewBitmap("3")
 
 	err = SetCPUAffinity(pid, af)
 	if err != nil {
