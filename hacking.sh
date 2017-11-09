@@ -48,7 +48,7 @@ RET=0
 
 if [ $# -eq 1 ] && [ "$1" == "-f" ]; then
     echo "do full code checking ..."
-    find ./ | grep -v vendor | grep -v .git | grep -v test |grep ".go"  > tmp
+    find ./ | grep -v vendor | grep -v .git | grep -v test |grep "\.go"  > tmp
     while IFS='' read -r line || [[ -n "$line" ]]; do
         do_check $line
     done < "tmp"
