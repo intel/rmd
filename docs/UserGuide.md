@@ -162,9 +162,9 @@ The score will be calculate as following:
 
 | request | hospitality score | cahce pool |
 | :-----: | :---------------: | :--------: |
-| max_cache == min_cache > 0 | `[0 | 100]` | Guarantee |
-| max_cache == min_cache == 0 | `[0 | 100]` | Shared |
-| max_cache > min_cache > 0 |  `[0, 100]` | Besteffort |
+| max_cache == min_cache > 0 | `[0 \| 100]` | Guarantee |
+| max_cache == min_cache == 0 | `[0 \| 100]` | Shared |
+| max_cache > min_cache > 0 |  `[0 , 100]` | Besteffort |
 
 
 To get hospitality score:
