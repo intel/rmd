@@ -1,5 +1,7 @@
 # RMD - the resource management daemon
 
+[![Build Status](https://travis-ci.org/intel/rmd.svg?branch=master)](https://travis-ci.org/intel/rmd)
+
 ## Documents
 
 * docs/UserGuide.md
