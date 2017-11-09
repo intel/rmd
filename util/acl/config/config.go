@@ -18,6 +18,7 @@ const (
 )
 
 const (
+	// CertClientUserRole is user role of the client
 	CertClientUserRole = "Cert Client User"
 )
 

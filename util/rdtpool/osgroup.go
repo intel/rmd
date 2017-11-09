@@ -109,8 +109,5 @@ func SetOSGroup() error {
 			osGroup.Schemata[cacheLevel][i].Mask = base.GetCosInfo().CbmMask
 		}
 	}
-	if err := proxyclient.Commit(osGroup, "."); err != nil {
-		return err
-	}
-	return nil
+	return proxyclient.Commit(osGroup, ".")
 }

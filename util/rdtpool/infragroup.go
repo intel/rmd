@@ -154,9 +154,5 @@ func SetInfraGroup() error {
 
 	infraGroup.Tasks = append(infraGroup.Tasks, tasks...)
 
-	if err := proxyclient.Commit(infraGroup, groupName); err != nil {
-		return err
-	}
-
-	return nil
+	return proxyclient.Commit(infraGroup, groupName)
 }

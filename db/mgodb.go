@@ -85,10 +85,7 @@ func (m *MgoDB) CreateWorkload(w *workload.RDTWorkLoad) error {
 	s := m.session.Copy()
 	defer s.Close()
 
-	if err := s.DB(Dbname).C(WorkloadTableName).Insert(w); err != nil {
-		return err
-	}
-	return nil
+	return s.DB(Dbname).C(WorkloadTableName).Insert(w)
 }
 
 // DeleteWorkload removes workload from db

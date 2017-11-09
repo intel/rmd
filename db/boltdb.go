@@ -66,10 +66,7 @@ func (b *BoltDB) ValidateWorkload(w *workload.RDTWorkLoad) error {
 	if err != nil {
 		return err
 	}
-	if err = validateWorkload(*w, ws); err != nil {
-		return err
-	}
-	return nil
+	return validateWorkload(*w, ws)
 }
 
 // CreateWorkload creates workload in db

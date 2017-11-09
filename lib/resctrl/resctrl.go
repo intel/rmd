@@ -69,11 +69,7 @@ func writeFile(dir, file, data string) error {
 
 // DestroyResAssociation removes resource group
 func DestroyResAssociation(group string) error {
-	path := filepath.Join(SysResctrl, group)
-	if err := os.RemoveAll(path); err != nil {
-		return err
-	}
-	return nil
+	return os.RemoveAll(filepath.Join(SysResctrl, group))
 }
 
 // CacheCos is the COS of a cache

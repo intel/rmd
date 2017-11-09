@@ -235,10 +235,7 @@ func Release(w *tw.RDTWorkLoad) error {
 		if err := proxyclient.DestroyResAssociation(w.CosName); err != nil {
 			return err
 		}
-		if err := rdtpool.SetOSGroup(); err != nil {
-			return err
-		}
-		return nil
+		return rdtpool.SetOSGroup()
 	}
 	// remove workload task ids from resource group
 	if len(w.TaskIDs) > 0 {
