@@ -1,0 +1,11 @@
+GOROOT=`go env |grep "GOROOT" |cut -d "=" -f2`
+GOROOT=${GOROOT#\"}
+GOROOT=${GOROOT%\"}
+
+GOPATH=`go env |grep GOPATH |cut -d "=" -f 2`
+GOPATH=${GOPATH%\"}
+GOPATH=${GOPATH#\"}
+
+export GOROOT
+export GOPATH
+export PATH=${PATH}:${GOROOT}/bin:${GOPATH}/bin

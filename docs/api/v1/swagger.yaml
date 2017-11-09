@@ -1,0 +1,293 @@
+swagger: '2.0'
+info:
+  title: RMD API
+  description: Resource Management Daemon API specification
+  version: "0.0.1"
+  contact:
+    name: RMD API Support
+    url: http://www.rmd.org
+    email: rmd@intel.com
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+schemes:
+  - http
+basePath: /v1
+produces:
+  - application/json
+paths:
+  /cache:
+     get:
+      summary: Host cache information
+      description: |
+        Get the cache information, include level 2, level 3 cache information if has
+      tags:
+        - cache
+      responses:
+        200:
+          description: cache info
+          schema:
+            type: object
+            properties:
+              cpuinfo:
+                $ref: '#/definitions/CachesSummary'
+  /cache/{cache_level}:
+    get:
+      summary: Host cache topology for specific level
+      description: |
+        Get the cache infor for specified cache level, also the endpoint suppport provide llc
+      tags:
+        - cache
+      parameters:
+      - name: cache_level
+        in: path
+        description: cache level
+        required: true
+        type: string
+        enum: ['l3', 'l2', 'llc']
+      responses:
+        200:
+          description: An array cache infor
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/CacheInfos'
+  /workloads:
+    get:
+      summary: Get all RMD managed work loads running on the host
+      description: |
+        Get all work loads running on the host
+      tags:
+        - workload
+      responses:
+        200:
+          description: Workload object
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/Workload'
+    post:
+      summary: Create a workload with enforcement
+      description: |
+        Create a workload by providing task list or cpu list
+      tags:
+        - workload
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: string
+            example:
+              core_ids: ["22"]
+              max_cache: 4
+              min_cache: 2
+      responses:
+        200:
+          description: Workload object
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/Workload'
+  /workloads/{workload_id}:
+    get:
+      summary: Get workload by id
+      description: |
+        Get workload by id
+      parameters:
+      - name: workload_id
+        in: path
+        description: workload id
+        required: true
+        type: string
+      tags:
+        - workload
+      responses:
+        200:
+          description: Workload object
+          schema:
+            $ref: '#/definitions/Workload'
+    delete:
+      summary: Delete workload by id
+      description: |
+        Delete workload by id
+      parameters:
+      - name: workload_id
+        in: path
+        description: workload id
+        required: true
+        type: string
+      tags:
+        - workload
+      responses:
+        200:
+          description: delete workload
+    patch:
+      summary: Update policy or cache ways of a workload
+      description: |
+        Update policy or cache ways of a workload
+      tags:
+        - workload
+      parameters:
+      - name: workload_id
+        in: path
+        description: workload id
+        required: true
+        type: string
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: string
+          example:
+            max_cache: 4
+            min_cache: 2
+      responses:
+        200:
+          description: Workload object
+          schema:
+            $ref: '#/definitions/Workload'
+        400:
+          description: Bad request
+        404:
+          description: Not found
+  /hospitality:
+    post:
+      summary: Get hospitality for a request
+      description: |
+        Get hospitality for a request
+      tags:
+        - hospitality
+      parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: string
+          example:
+            max_cache: 4
+            min_cache: 2
+      responses:
+        200:
+          description: Score of hospitality
+          schema:
+            $ref: '#/definitions/Score'
+  /policy:
+    get:
+      summary: List pre-defined cache policy
+      description: |
+        List pre-defined cache polies
+      tags:
+        - policy
+      responses:
+        200:
+          description: list of pre-defined policies
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/Policy'
+definitions:
+  CacheSummary:
+    type: object
+    properties:
+      number:
+        type: integer
+        format: int32
+        description: number of cache
+      cache_id:
+        type: array
+        items:
+          type: string
+  CachesSummary:
+    type: object
+    properties:
+      rdt:
+        type: boolean
+        description: rdt supported
+      cqm:
+        type: boolean
+        description: cache mointoring suppported
+      cdp:
+        type: boolean
+        description: cache mointoring suppported
+      caches:
+        $ref: '#/definitions/CacheSummary'
+  CacheInfo:
+    type: object
+    properties:
+      cache_id:
+        type: string
+        description: cache id
+      total_size:
+        type: string
+        description: total size of the cache
+      cdp:
+        type: boolean
+        description: cache mointoring suppported
+  CacheInfos:
+    type: object
+    properties:
+      number:
+        type: integer
+        format: int32
+        description: number of cache infor
+      Caches:
+        $ref: '#/definitions/CacheInfo'
+  Workload:
+    type: object
+    properties:
+      id:
+        description: Id of the workload
+        type: integer
+        format: int32
+      core_ids:
+        description: CPU core ids the workload running on
+        type: array
+        items:
+          type: string
+      task_ids:
+        description: Task ids of the workload
+        type: array
+        items:
+          type: string
+      policy:
+        description: Workload priority tier
+        type: string
+      status:
+        description: Workload priority tier
+        type: string
+      cos_name:
+        description: Workload priority tier
+        type: string
+  CacheScore:
+    type: object
+    properties:
+      l3:
+        type: object
+  Score:
+    type: object
+    properties:
+      score:
+        $ref: '#/definitions/CacheScore'
+  Tier:
+    type: object
+    properties:
+      MaxCache:
+        type: string
+      MinCache:
+        type: string
+  Policy:
+    type: object
+    properties:
+      gold:
+        type: array
+        items:
+          $ref: '#/definitions/Tier'
+      silver-bf:
+        type: array
+        items:
+          $ref: '#/definitions/Tier'
+      bronze-shared:
+        type: array
+        items:
+          $ref: '#/definitions/Tier'

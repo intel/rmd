@@ -1,0 +1,11 @@
+# This is a cpu microarch config.
+
+title = "cpu microarch"
+
+[[Broadwell]]
+family=6
+model=61
+
+[[Broadwell]]
+family=6
+model=79

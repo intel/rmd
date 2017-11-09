@@ -1,0 +1,21 @@
+catpolicy:
+    broadwell:
+        - gold:
+            - MaxCache: 4
+            - MinCache: 4
+        - silver-bf:
+            - MaxCache: 2
+            - MinCache: 1
+        - bronze-shared:
+            - MaxCache: 0
+            - MinCache: 0
+    skylake:
+        - gold:
+            - MaxCache: 3
+            - MinCache: 3
+        - silver-bf:
+            - MaxCache: 2
+            - MinCache: 1
+        - bronze-shared:
+            - MaxCache: 0
+            - MinCache: 0

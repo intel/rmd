@@ -1,0 +1,13 @@
+p, user, /cache/l*/*, GET
+p, user, /cache/l*, GET
+p, user, /cache, GET
+p, user, /policy, GET
+p, user, /workloads, GET
+p, user, /workloads/*, GET
+p, user, /hospitality, GET
+
+p, root, /workloads, POST
+p, root, /workloads/*, (PATCH)|(DELETE)
+
+g, root, user
+g, admin, root

@@ -1,0 +1,6 @@
+*.swp
+*.exe
+*.o
+*.a
+.idea/
+vendor/
