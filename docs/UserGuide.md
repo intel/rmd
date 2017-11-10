@@ -1,9 +1,16 @@
 # RMD User Guide:
 
+## Pre-requires
+
+Please read the [requirements][requirements].
+
+[requirements]: https://github.com/intel/rmd/blob/master/docs/PreRequirment.md
+
 ## RMD processes
 
-For security considerations, RMD daemon runs the RESTAPI service (a spawned child) as a normal unix user 'rmd'
-process and performs privileged operations (PAM authentication or resctrl) as 'root' unix user.
+For security considerations, RMD daemon runs the RESTAPI service (a spawned
+child) as a normal unix user 'rmd' process and performs privileged operations
+(PAM authentication or resctrl) as 'root' unix user.
 
 Ensure the following libraries are installed on your target system to use PAM
 Debian
@@ -211,3 +218,5 @@ curl https://hostname:port/v1/cache --cert etc/rmd/cert/client/cert.pem \
          --key etc/rmd/cert/client/key.pem \
          --cacert  etc/rmd/cert/client/ca.pem
 ```
+
+[1]: http://www.intel.com/content/www/us/en/processors/architectures-software-developer-manuals.html
