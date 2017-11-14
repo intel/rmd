@@ -20,18 +20,15 @@ Clone or copy the code into $GOPATH/src/github.com/intel/rmd
 ## Build & install rmd
 
 ```
-$ go get github.com/tools/godep
+$ go get github.com/Masterminds/glide && glide install
 
-(goto source code topdir)
-# get vendor packages
-$ go run cmd/get_vendor.go
 # generage configuration file
 $ go run cmd/gen_conf.go
 
 # install RMD into $GOPATH/bin
-$ ./install-deps
+$ ./install-deps.sh
 # To skip setting up PAM Berkeley DB users supply.
-$ ./install-deps --skip-pam-userdb
+$ ./install-deps.sh --skip-pam-userdb
 ```
 
 ## Run rmd
@@ -58,12 +55,9 @@ Bash shell script `test.sh` is a helper script to do unit testing and functional
 
 Read test.sh to understand what functional test cases do.
 
-## Godep
+## Glide
 
-Use godep (https://github.com/tools/godep) to add/update dependencies.
-
-As we don't commit vendor into our release code, it is somehow hacking to
-add/update/remove dependencies from Godeps.json .
+Use glide (https://github.com/Masterminds/glide) to manage dependencies.
 
 ## Swagger
 

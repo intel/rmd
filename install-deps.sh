@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-if [ ! -f install-deps ]; then
+if [ ! -f install-deps.sh ]; then
 	echo 'This script must be run within its container folder' 1>&2
 	exit 1
 fi
@@ -8,7 +8,8 @@ fi
 BASE=$(pwd)
 source $BASE/scripts/go-env
 
-godep go install github.com/intel/rmd && \
+go get github.com/Masterminds/glide && glide install
+go install github.com/intel/rmd && \
 cp -r etc/rmd /etc
 
 USER="rmd"

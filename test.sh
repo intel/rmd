@@ -32,12 +32,12 @@ fi
 rm -rf users
 
 if [ "$1" == "-u" ]; then
-    godep go test -short -v -cover $(go list ./... | grep -v /vendor/ | grep -v /test/ | grep -v /cmd)
+    go test -short -v -cover $(glide novendor | grep -v /test/)
     exit $?
 fi
 
 if [ "$1" != "-i" -a "$1" != "-s" ]; then
-    godep go test -short -v -cover $(go list ./... | grep -v /vendor/ | grep -v /test/ | grep -v /cmd)
+    go test -short -v -cover $(glide novendor | grep -v /test/)
 fi
 
 RESDIR="/sys/fs/resctrl"
@@ -90,7 +90,7 @@ fi
 
 DATA="$DATA, \"policypath\":\"/tmp/policy.toml\", \"dbtransport\":\"/tmp/rmd.db\", \"stdout\":false, \"logfile\":\"/tmp/rmd.log\""
 
-godep go run ./cmd/gen_conf.go -path ${CONFFILE} -data "{$DATA}"
+go run ./cmd/gen_conf.go -path ${CONFFILE} -data "{$DATA}"
 
 if [ $? -ne 0 ]; then
     echo "Failed to generate configure file. Exit."
@@ -101,9 +101,7 @@ cp -r etc/rmd/policy.toml /tmp/policy.toml
 
 cat $CONFFILE
 
-# Use godep to build rmd binary instead of using dependicies of user's
-# GOPATH
-godep go install github.com/intel/rmd
+go install github.com/intel/rmd
 if [ $? -ne 0 ]; then
     echo "Failed to build rmd, please correct build issue."
     exit 1
