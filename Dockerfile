@@ -7,8 +7,8 @@ WORKDIR /go/src/github.com/intel/rmd
 COPY . .
 
 RUN apt update && apt install openssl libpam0g-dev db-util -y && rm -rf /var/lib/apt/lists/*
-RUN ./install-deps.sh --skip-pam-userdb
-RUN ./test.sh -u
+RUN ./scripts/install-deps.sh --skip-pam-userdb
+RUN ./scripts/test.sh -u
 
 # what etc should we use?
 # log

@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
 
-if [ ! -f install-deps.sh ]; then
-	echo 'This script must be run within its container folder' 1>&2
-	exit 1
-fi
-
-BASE=$(pwd)
-source $BASE/scripts/go-env
+BASE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source $BASE/go-env
 
 go get github.com/Masterminds/glide && glide install
 go install github.com/intel/rmd && \
-cp -r etc/rmd /etc
+cp -r $BASE/../etc/rmd /etc
 
 USER="rmd"
 useradd $USER || echo "User rmd already exists."
@@ -28,10 +23,10 @@ if [ ! -d ${DBFILE%/*} ]; then
 fi
 
 if [ "$1" == "--skip-pam-userdb" ]; then
-    ./setup_pam_files.sh $1
+    $BASE/setup_pam_files.sh $1
 else
-    ./setup_pam_files.sh
+    $BASE/setup_pam_files.sh
 fi
 
 DATA="\"logfile\":\"$LOGFILE\", \"dbtransport\":\"$DBFILE\", \"logtostdout\":false"
-go run ./cmd/gen_conf.go -path /etc/rmd/rmd.toml -data "{$DATA}"
+go run $BASE/../cmd/gen_conf.go -path /etc/rmd/rmd.toml -data "{$DATA}"

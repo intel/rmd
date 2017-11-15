@@ -3,14 +3,12 @@
 # TODO add a simple script for functional test.
 # All these are hardcode and it only support BDW platform.
 # setup PAM files
-
-PAMSRCFILE="etc/rmd/pam/test/rmd"
+BASE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PAMSRCFILE="$BASE/../etc/rmd/pam/test/rmd"
 PAMDIR="/etc/pam.d"
 BERKELEYDBFILENAME="rmd_users.db"
 
-BASE=$(pwd)
-
-source $BASE/scripts/go-env
+source $BASE/go-env
 
 if [ -d $PAMDIR ]; then
     cp $PAMSRCFILE $PAMDIR
@@ -31,6 +29,7 @@ fi
 
 rm -rf users
 
+cd $BASE/..
 if [ "$1" == "-u" ]; then
     go test -short -v -cover $(glide novendor | grep -v /test/)
     exit $?
@@ -39,6 +38,7 @@ fi
 if [ "$1" != "-i" -a "$1" != "-s" ]; then
     go test -short -v -cover $(glide novendor | grep -v /test/)
 fi
+cd -
 
 RESDIR="/sys/fs/resctrl"
 PID="/var/run/rmd.pid"
@@ -90,14 +90,14 @@ fi
 
 DATA="$DATA, \"policypath\":\"/tmp/policy.toml\", \"dbtransport\":\"/tmp/rmd.db\", \"stdout\":false, \"logfile\":\"/tmp/rmd.log\""
 
-go run ./cmd/gen_conf.go -path ${CONFFILE} -data "{$DATA}"
+go run $BASE/../cmd/gen_conf.go -path ${CONFFILE} -data "{$DATA}"
 
 if [ $? -ne 0 ]; then
     echo "Failed to generate configure file. Exit."
     exit 1
 fi
 
-cp -r etc/rmd/policy.toml /tmp/policy.toml
+cp -r $BASE/../etc/rmd/policy.toml /tmp/policy.toml
 
 cat $CONFFILE
 
@@ -117,12 +117,12 @@ sleep 1
 
 if [ "$1" == "-s" ]; then
     if [ "$2" == "-nocert" ]; then
-        CONF=$CONFFILE ginkgo -v -tags "integrationHTTPS" --focus="PAMAuth" ./test/integrationHTTPS/...
+        CONF=$CONFFILE ${GOPATH}/bin/ginkgo -v -tags "integrationHTTPS" --focus="PAMAuth" ./test/integrationHTTPS/...
     else
-        CONF=$CONFFILE ginkgo -v -tags "integrationHTTPS" --focus="CertAuth" ./test/integrationHTTPS/...
+        CONF=$CONFFILE ${GOPATH}/bin/ginkgo -v -tags "integrationHTTPS" --focus="CertAuth" ./test/integrationHTTPS/...
     fi
 else
-    CONF=$CONFFILE ginkgo -v -tags "integration" ./test/integration/...
+    CONF=$CONFFILE ${GOPATH}/bin/ginkgo -v -tags "integration" ./test/integration/...
 fi
 
 rev=$?

@@ -27,7 +27,7 @@ Berkeley database file.
 To setup users in Berkeley database use the bash script:
 
 ```
-./setup_rmd_users.sh
+sudo ./scripts/setup_rmd_users.sh
 ```
 Note: Only root user can setup or access users in Berkeley database.
 
