@@ -2,9 +2,9 @@ package pam
 
 import (
 	"errors"
-	"fmt"
 	"github.com/intel/rmd/lib/pam/config"
 	"github.com/msteinert/pam"
+	"github.com/sirupsen/logrus"
 )
 
 // Credential represents user provided credential
@@ -19,16 +19,17 @@ func (c Credential) PAMResponseHandler(s pam.Style, msg string) (string, error) 
 	case pam.PromptEchoOff:
 		return c.Password, nil
 	case pam.PromptEchoOn:
-		fmt.Println(msg)
+		logrus.Info(msg)
 		return c.Password, nil
 	case pam.ErrorMsg:
-		fmt.Errorf(msg)
+		logrus.Error(msg)
 		return "", nil
 	case pam.TextInfo:
-		fmt.Println(msg)
+		logrus.Info(msg)
 		return "", nil
+	default:
+		return "", errors.New("unrecognized conversation message style")
 	}
-	return "", errors.New("Unrecognized message style")
 }
 
 // pamTxAuthenticate authenticates a PAM transaction
