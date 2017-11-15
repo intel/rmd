@@ -1,6 +1,8 @@
 # RMD - the resource management daemon
 
 [![Build Status](https://travis-ci.org/intel/rmd.svg?branch=master)](https://travis-ci.org/intel/rmd)
+[![Go Report Card](https://goreportcard.com/badge/github.com/intel/rmd)](https://goreportcard.com/report/github.com/intel/rmd)
+[![GoDoc](https://godoc.org/github.com/intel/rmd?status.svg)](https://godoc.org/github.com/intel/rmd)
 
 ## Documents
 
