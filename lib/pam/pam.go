@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/intel/rmd/lib/pam/config"
 	"github.com/msteinert/pam"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // Credential represents user provided credential
@@ -19,13 +19,13 @@ func (c Credential) PAMResponseHandler(s pam.Style, msg string) (string, error) 
 	case pam.PromptEchoOff:
 		return c.Password, nil
 	case pam.PromptEchoOn:
-		logrus.Info(msg)
+		log.Info(msg)
 		return c.Password, nil
 	case pam.ErrorMsg:
-		logrus.Error(msg)
+		log.Error(msg)
 		return "", nil
 	case pam.TextInfo:
-		logrus.Info(msg)
+		log.Info(msg)
 		return "", nil
 	default:
 		return "", errors.New("unrecognized conversation message style")
