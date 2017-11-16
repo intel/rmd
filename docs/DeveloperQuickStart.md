@@ -20,53 +20,65 @@ Clone or copy the code into $GOPATH/src/github.com/intel/rmd
 ## Build & install rmd
 
 ```
-$ go get github.com/tools/godep
+$ go get github.com/Masterminds/glide && glide install
 
-(goto source code topdir)
-# get vendor packages
-$ go run cmd/get_vendor.go
 # generage configuration file
 $ go run cmd/gen_conf.go
 
+# install-deps.sh requires to using sudo access, also need go command,
+# so we need to amend go binary path (e.g. `/usr/local/go/bin/go`) into
+# secure_path of /etc/sudoers
 # install RMD into $GOPATH/bin
-$ ./install-deps
+
+$ sudo ./scripts/install-deps.sh
 # To skip setting up PAM Berkeley DB users supply.
-$ ./install-deps --skip-pam-userdb
+$ sudo ./scripts/install-deps.sh --skip-pam-userdb
 ```
 
 ## Run rmd
 
 ```
-$ $GOPATH/bin/rmd --help
-$ $GOPATH/bin/rmd
+$ sudo $GOPATH/bin/rmd --help
+$ sudo $GOPATH/bin/rmd
 ```
 
 ## Commit code
 
 Bash shell script `hacking.sh` checks coding style using `go fmt` and `golint`.
 
-Before you commit your changes, run `./hacking.sh` and address errors before you push your changes.
+Before you commit your changes, run `hacking.sh` in scripts directory,
+and address errors before you push your changes.
+
+Besides, `hacking.sh -f` will do a full code checking.
 
 ## Test
 
-Bash shell script `test.sh` is a helper script to do unit testing and functional testing.
+Bash shell script `test.sh` is a helper script to do unit testing and
+functional testing.
 
-`./test.sh -u` to run all unit test cases.
-`./test.sh -i` to run all functional test cases.
-`./test.sh -i -s` to run all functional test cases with certificate based https support.
-`./test.sh -i -s -nocert` to run all functional test cases with PAM based https support.
+`sudo -E ./test.sh -u` to run all unit test cases.
+
+To run functional testing, you need to install ginkgo by:
+
+```
+$ go get github.com/onsi/ginkgo/ginkgo
+```
+
+`sudo -E ./test.sh -i` to run all functional test cases.
+`sudo -E ./test.sh -i -s` to run all functional test cases with certificate
+based https support.
+`sudo -E ./test.sh -i -s -nocert` to run all functional test cases with PAM
+based https support.
 
 Read test.sh to understand what functional test cases do.
 
-## Godep
+## Glide
 
-Use godep (https://github.com/tools/godep) to add/update dependencies.
-
-As we don't commit vendor into our release code, it is somehow hacking to
-add/update/remove dependencies from Godeps.json .
+Use glide (https://github.com/Masterminds/glide) to manage dependencies.
 
 ## Swagger
 
 The API definitions are located under docs/v1/swagger.yaml
 
-Upload docs/api/v1/swagger.yaml to http://editor.swagger.io/#!/ to generate a client.
+Upload docs/api/v1/swagger.yaml to http://editor.swagger.io/#!/ to generate
+a client.

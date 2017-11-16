@@ -6,11 +6,12 @@ if [ -d $PAMDIR ]; then
     cp $PAMSRCFILE $PAMDIR
 fi
 
+BASE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BERKELEYDBFILE="/etc/rmd/pam/rmd_users.db"
 
 function SetupRMDUsersByResponse {
     if [ $1 == "y" -o $1 == "Y" ]; then
-        ./setup_rmd_users.sh
+        $BASE/setup_rmd_users.sh
     elif [ $1 != "n" -a $1 != "N" ]; then
         echo "Invalid input. No action taken."
     fi

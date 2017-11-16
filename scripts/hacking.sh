@@ -1,6 +1,6 @@
 #!/bin/bash
 # Author: Eli Qiao <qiaoliyong@gmail.com>
-
+BASE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ret=$?
 files=$(git diff HEAD --stat | awk '{if ($1 ~ /\.go$/) {print $1}}')
 arr=($files)
@@ -48,7 +48,7 @@ RET=0
 
 if [ $# -eq 1 ] && [ "$1" == "-f" ]; then
     echo "do full code checking ..."
-    find ./ | grep -v vendor | grep -v .git | grep -v test |grep "\.go"  > tmp
+    find $BASE/../ | grep -v vendor | grep -v "\.git" | grep -v test |grep "\.go"  > tmp
     while IFS='' read -r line || [[ -n "$line" ]]; do
         do_check $line
     done < "tmp"
