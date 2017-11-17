@@ -2,8 +2,6 @@
 # Author: Eli Qiao <qiaoliyong@gmail.com>
 BASE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ret=$?
-files=$(git diff HEAD --stat | awk '{if ($1 ~ /\.go$/) {print $1}}')
-arr=($files)
 # hacking command list
 # don't check shift
 cmds=("golint" "go fmt" "go tool vet -shift=false")
@@ -57,6 +55,8 @@ if [ $# -eq 1 ] && [ "$1" == "-f" ]; then
 
     rm "tmp"
 else
+    files=$(git diff HEAD --stat | awk '{if ($1 ~ /\.go$/) {print $1}}')
+    arr=($files)
     for f in "${arr[@]}"
     do
         do_check $f
