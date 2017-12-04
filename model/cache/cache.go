@@ -41,10 +41,10 @@ type Info struct {
 	Location         string            `json:"location_on_socket"`
 	Node             string            `json:"location_on_node"`
 	ShareCPUList     string            `json:"share_cpu_list"`
-	AvaliableWays    string            `json:"avaliable_ways"`
-	AvaliableCPUs    string            `json:"avaliable_cpus"`
-	AvaliableIsoCPUs string            `json:"avaliable_isolated_cpus"`
-	AvaliablePolicy  map[string]uint32 `json:"avaliable_policy"` // should move out here
+	AvailableWays    string            `json:"available_ways"`
+	AvailableCPUs    string            `json:"available_cpus"`
+	AvailableIsoCPUs string            `json:"available_isolated_cpus"`
+	AvailablePolicy  map[string]uint32 `json:"available_policy"` // should move out here
 }
 
 // Infos is group of cache info
@@ -212,12 +212,12 @@ func (c *Infos) GetByLevel(level uint32) *rmderror.AppError {
 			newCachdinfo.Location, _ = cpu.LocateOnSocket(cpuid)
 			newCachdinfo.Node = cpu.LocateOnNode(cpuid)
 
-			newCachdinfo.AvaliableWays = av[sc.ID].ToString()
+			newCachdinfo.AvailableWays = av[sc.ID].ToString()
 
 			cpuPools, _ := rdtpool.GetCPUPools()
 			defaultCpus, _ := base.CPUBitmaps(resctrl.GetResAssociation()["."].CPUs)
-			newCachdinfo.AvaliableCPUs = cpuPools["all"][sc.ID].And(defaultCpus).ToHumanString()
-			newCachdinfo.AvaliableIsoCPUs = cpuPools["isolated"][sc.ID].And(defaultCpus).ToHumanString()
+			newCachdinfo.AvailableCPUs = cpuPools["all"][sc.ID].And(defaultCpus).ToHumanString()
+			newCachdinfo.AvailableIsoCPUs = cpuPools["isolated"][sc.ID].And(defaultCpus).ToHumanString()
 
 			p, err := policy.GetDefaultPlatformPolicy()
 			if err != nil {
@@ -252,7 +252,7 @@ func (c *Infos) GetByLevel(level uint32) *rmderror.AppError {
 				}
 
 			}
-			newCachdinfo.AvaliablePolicy = ap
+			newCachdinfo.AvailablePolicy = ap
 
 			c.Caches[uint32(id)] = newCachdinfo
 			c.Num = c.Num + 1
