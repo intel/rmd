@@ -280,12 +280,20 @@ func getAvailablePolicyCount(ap map[string]uint32,
 		ways = iMin
 	case rdtpool.Shared:
 		// TODO get live count ?
-		ap[tier] = uint32(reserved[rdtpool.Shared].Quota)
+		if r, ok := reserved[rdtpool.Shared]; !ok {
+			// no Shared group was set
+			ap[tier] = 0
+		} else {
+			ap[tier] = uint32(r.Quota)
+		}
 		return nil
 	}
 
-	pav, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, pool, cacheLevel)
 	ap[tier] = 0
+	pav, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, pool, cacheLevel)
+	if len(pav) == 0 {
+		return nil
+	}
 	freeBitmapStrs := pav[cID].ToBinStrings()
 
 	for _, val := range freeBitmapStrs {
