@@ -3,8 +3,6 @@
 BASE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $BASE/go-env
 
-go get github.com/Masterminds/glide && glide install
-go install github.com/intel/rmd && \
 cp -r $BASE/../etc/rmd /etc
 
 USER="rmd"

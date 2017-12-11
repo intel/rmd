@@ -4,3 +4,4 @@
 *.a
 .idea/
 vendor/
+build/

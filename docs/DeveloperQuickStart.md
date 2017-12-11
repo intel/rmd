@@ -13,50 +13,49 @@ export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 go env
 ```
 
-## Clone rmd code
+## Get rmd
 
-Clone or copy the code into $GOPATH/src/github.com/intel/rmd
+$ go get github.com/intel/rmd
 
 ## Build & install rmd
 
 ```
-$ go get github.com/Masterminds/glide && glide install
+# build rmd
+$ cd ${GOPATH}/src/github.com/intel/rmd
+$ make
+# You will fine the binary under ${GOPATH}/src/github.com/intel/rmd/build
 
-# generage configuration file
-$ go run cmd/gen_conf.go
-
-# install-deps.sh requires to using sudo access, also need go command,
-# so we need to amend go binary path (e.g. `/usr/local/go/bin/go`) into
-# secure_path of /etc/sudoers
-# install RMD into $GOPATH/bin
-
-$ sudo ./scripts/install-deps.sh
-# To skip setting up PAM Berkeley DB users supply.
-$ sudo ./scripts/install-deps.sh --skip-pam-userdb
+# install RMD
+$ sudo make install
+# this will install RMD into /usr/local/sbin/ along with some default
+configuration file under /etc/rmd
 ```
 
 ## Run rmd
 
 ```
-$ sudo $GOPATH/bin/rmd --help
-$ sudo $GOPATH/bin/rmd
+$ sudo /usr/local/sbin/rmd --help
+$ sudo /usr/local/sbin/rmd
 ```
 
 ## Commit code
 
 Bash shell script `hacking.sh` checks coding style using `go fmt` and `golint`.
-
 Before you commit your changes, run `hacking.sh` in scripts directory,
 and address errors before you push your changes.
 
-Besides, `hacking.sh -f` will do a full code checking.
+Alternatively, you can run `make check` to do a full static code checking.
 
 ## Test
 
 Bash shell script `test.sh` is a helper script to do unit testing and
 functional testing.
 
-`sudo -E ./test.sh -u` to run all unit test cases.
+`sudo -E ./test.sh -u` to run all unit test cases or just `sudo make test-unit`
+
+P.S. There are issues where the in the unit test case, some of them depends
+on configuration file, to pass unit test case, better to install rmd first
+by `sudo make install` or manually copy etc/rmd to /etc/rmd.
 
 To run functional testing, you need to install ginkgo by:
 
@@ -64,10 +63,13 @@ To run functional testing, you need to install ginkgo by:
 $ go get github.com/onsi/ginkgo/ginkgo
 ```
 
-`sudo -E ./test.sh -i` to run all functional test cases.
-`sudo -E ./test.sh -i -s` to run all functional test cases with certificate
+Run `sudo make test-func` to run functional test, alternatively using the
+following schell scripts command line.
+
+`sudo -E ./scripts/test.sh -i` to run all functional test cases.
+`sudo -E ./scripts/test.sh -i -s` to run all functional test cases with certificate
 based https support.
-`sudo -E ./test.sh -i -s -nocert` to run all functional test cases with PAM
+`sudo -E ./scripts/test.sh -i -s -nocert` to run all functional test cases with PAM
 based https support.
 
 Read test.sh to understand what functional test cases do.
