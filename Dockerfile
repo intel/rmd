@@ -8,9 +8,8 @@ COPY . .
 
 RUN apt update && apt install openssl libpam0g-dev db-util -y && \
         rm -rf /var/lib/apt/lists/*
-RUN go get -u github.com/golang/lint/golint && ./scripts/hacking.sh -f
-RUN ./scripts/install-deps.sh --skip-pam-userdb
-RUN ./scripts/test.sh -u
+RUN make install && make clean
+RUN make test-unit
 
 # what etc should we use?
 # log
