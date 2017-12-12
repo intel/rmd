@@ -87,7 +87,7 @@ Through the "/workloads" entry point you can specify a workload by CPU IDs and/o
 ### "/hospitality" entry point ###
 The reason behind this "/hospitality" entry point is that there are often the needs to know how well a host can do to fulfill a certain cache allocation requirement. This requirement usually comes from scheduling in a large cluster deployment. So the notion of "hospitality score" is introduced.
 
-Why can't the available cache amount do the job? Currently the last level cache in Intel platforms can only be allocated contiguously. So the totally amount of available last level cache won't help due to segmentation issues.
+Why can't the available cache amount do the job? Currently the last level cache in Intel platforms can only be allocated contiguously. So the totally amount of available last level cache won't help due to fragmentation issues.
 
 The hospitality score is calculated differently for workloads of different cache groups. (In below explanation 'value' means the largest available contiguous cache ways in the corresponding group)
 
@@ -98,17 +98,18 @@ The hospitality score is calculated differently for workloads of different cache
   `if min_cache < value < max_cache then return (value/max)*100`<br>
   `if value < min_cache then return 0`
 * shared group:<br>
-  `return 100`
+  `return 100 if current workload number < max_allowed_shared in shared group`
 
 
 ### "/policy" entry point ###
 The "/policy" entry point contains the pre-defined recommended cache usage values for the specific platform that this RMD instance is running. Though completely configurable, the default policies are defined as "Gold/Sliver/Bronze" to classify different service levels. API user can get policies and associate workloads with one of the policies.
 
 ## Refereneces ##
-[Deployment guide](docs/deployment_guide.md)
+<!--- TODO documents  to be added -->
+[Deployment guide](docs/deployment_guide.md)   
 
 [API Documentation](docs/api/v1/swagger.yaml)
 
-[Users guide](docs/UserGuide.md_)
+[Users guide](docs/UserGuide.md)
 
-[Developers guide](docs/developers_guide.md)
+[Developers guide](docs/DeveloperQuickStart.md)
