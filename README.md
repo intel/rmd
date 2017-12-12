@@ -45,7 +45,7 @@ RMD divides the system L3 cache into the following groups or pools. Each task of
 
 The amount of cache ways for each of the above groups are configurable in the RMD configuration file. Below diagram gives an example of a system of 11 cache ways. 
 
-![RMD Groups](https://github.com/intel/rmd/tree/master/docs/pic/rmd_pools.png)
+![RMD Groups](docs/pic/rmd_pools.png)
 
 ### Cache Specification ###
 Please refer to the [API documentation](docs/api/v1/swagger.yaml) for a comprehensive description of RMD APIs. Here is a brief depiction of how to assign workloads to different aforementioned cache pools.
@@ -69,7 +69,7 @@ From a logical point of view, there are several components of RMD:
 * Policy engine -- decides whether to enforce or reject user requirement based on system resource status
 * Resctrl filesystem interface -- interacts with kernel resctrl interface to enforce user requirements
 
-![RMD logical view](https://github.com/intel/rmd/tree/master/docs/pic/rmd_logical_view.png)
+![RMD logical view](docs/pic/rmd_logical_view.png)
 
 From a physical point of view, RMD is composed of two processes -- the front-end and the back-end. The splitting of RMD into two processes is of security concerns. The front-end process which conducts most of the jobs runs as a normal user (least privilege). Whereas the back-end process runs as a privileged user because it has to do modifications to the resctrl file system. The back-end process is deliberately kept as small/simple as possible. Only add logic to the back-end when there is definitely a need to lift privilege. The front-end and back-end communicates via an anonymous pipe.
 
