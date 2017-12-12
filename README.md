@@ -20,6 +20,10 @@ limitations under the License.
 
 # Resource Management Daemon #
 
+[![Build Status](https://travis-ci.org/intel/rmd.svg?branch=master)](https://travis-ci.org/intel/rmd)
+[![Go Report Card](https://goreportcard.com/badge/github.com/intel/rmd)](https://goreportcard.com/report/github.com/intel/rmd)
+[![GoDoc](https://godoc.org/github.com/intel/rmd?status.svg)](https://godoc.org/github.com/intel/rmd)
+
 ----------
 
 Resource Management Daemon (RMD) is a system daemon running on generic Linux platforms. The purpose of this daemon is to provide a central uniform interface portal for hardware resource management tasks on x86 platforms.
