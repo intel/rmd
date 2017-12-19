@@ -18,7 +18,7 @@ you can find the download links from [release notes](https://github.com/intel/rm
 ### Setup configuration file
 
 RMD has some default configurations, you may also find some configure file
-example from this [exmaple](../etc/rmd).
+example from this [samples](../etc/rmd).
 
 Most of the configuration files are in [TOML](https://github.com/toml-lang/toml) format.
 Users can create their own configuration files by referring the following
@@ -26,9 +26,10 @@ sample. And RMD also provides the script(cmd/gen_conf.go) to generate it
 by probing the local host platform capabilities for proper CachePool settings.
 
 RMD will try to search `/usr/local/etc/rmd`, `/etc/rmd`, `./etc/rmd` to find
-configure files.
+configure files, put configuration files into these directory or RMD will
+use default configurations.
 
-Here's an sample for the main configure file of RMD.
+Here's a sample for the main configure file of RMD.
 
 Sample configuration file: (/usr/local/etc/rmd/rmd.toml)
 ```
@@ -90,7 +91,7 @@ several things by themselves.
     $ sudo useradd rmd
     ```
     P.S. RMD itself will create a rmd user if that user does not existed.
-    
+
 2. Ensure the following packages are installed on your target system for PAM
 
     Debian or Ubuntu:
@@ -118,12 +119,12 @@ Launch RMD manually, by specifying configuration directory:
 $ sudo rmd --conf-dir /usr/local/etc/rmd
 ```
 
-*RMD can be launched in debug mode that exposes RESTAPI service on HTTP.
+RMD can be launched in debug mode that exposes RESTAPI service on HTTP.
 By default it is launched on port 8081. (http://127.0.0.1:8081)
 
 ```shell
-$ sudo rmd --debug 
-```*
+$ sudo rmd --debug
+```
 
 ## RMD service usages
 
