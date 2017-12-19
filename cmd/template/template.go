@@ -19,7 +19,7 @@ var Options = map[string]interface{}{
 	"besteffort":      7,
 	"shared":          2,
 	"shrink":          false,
-	"policypath":      "/etc/rmd/policy.toml",
+	"policypath":      "/usr/local/etc/rmd/policy.toml",
 }
 
 // Templ is content of template
@@ -31,8 +31,8 @@ title = "RMD Config"
 address = "{{.address}}"
 policypath = "{{.policypath}}"
 tlsport = {{.tlsport}}
-# certpath = "/etc/rmd/cert/server" # Only support pem format, hard code that CAFile is ca.pem, CertFile is rmd-cert.pem, KeyFile is rmd-key.pem
-# clientcapath = "/etc/rmd/cert/client" # Only support pem format, hard code that CAFile is ca.pem
+# certpath = "/usr/local/etc/rmd/cert/server" # Only support pem format, hard code that CAFile is ca.pem, CertFile is rmd-cert.pem, KeyFile is rmd-key.pem
+# clientcapath = "/usr/local/etc/rmd/cert/client" # Only support pem format, hard code that CAFile is ca.pem
 clientauth = "{{.clientauth}}"  # can be "no, require, require_any, challenge_given, challenge", challenge means require and verify.
 # unixsock = "/var/run/rmd.sock"
 
@@ -45,7 +45,7 @@ stdout = {{.logtostdout}}
 [database]
 backend = "{{.dbbackend}}" # mgo
 transport = "{{.dbtransport}}" # mongodb://localhost
-dbname = "bolt" # RDTPolicy
+dbname = "bolt"
 
 [debug]
 enabled = false
@@ -69,12 +69,12 @@ besteffort = {{.besteffort}}
 shared = {{.shared}}
 
 [acl]
-path = "/etc/rmd/acl/"  #
+# path = "/usr/local/etc/rmd/acl/"  #
 # use CSV format
-filter = "url" # at present just support "url", will support "url,ip,proto"
+# filter = "url" # at present just support "url", will support "ip, proto"
 authorization = "signature" # authorize the client, can identify client by signature, role(OU) or username(CN). Default value is signature. If value is signature, admincert and usercert should be set.
-admincert = "/etc/rmd/acl/roles/admin/" # A cert is used to describe user info. These cert files in this path are used to define the users that are admin. Only pem format file at present. The files can be updated dynamicly.
-usercert = "/etc/rmd/acl/roles/user/" # A cert is used to describe user info. These cert files in this path are used to define the user with low privilege. Only pem format file at present. The files can be updated dynamicly.
+# admincert = "/usr/local/etc/rmd/acl/roles/admin/" # A cert is used to describe user info. These cert files in this path are used to define the users that are admin. Only pem format file at present. The files can be updated dynamicly.
+# usercert = "/usr/local/etc/rmd/acl/roles/user/" # A cert is used to describe user info. These cert files in this path are used to define the user with low privilege. Only pem format file at present. The files can be updated dynamicly.
 
 [pam]
 service = "rmd"
