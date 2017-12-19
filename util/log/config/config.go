@@ -18,7 +18,7 @@ type Log struct {
 }
 
 var configOnce sync.Once
-var log = &Log{"var/log/rmd.log", "dev", "debug", true}
+var log = &Log{"/var/log/rmd/rmd.log", "dev", "debug", true}
 
 // NewConfig loads log config
 func NewConfig() Log {

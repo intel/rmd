@@ -14,8 +14,7 @@ type Database struct {
 
 var configOnce sync.Once
 
-// FIXME , the DBName should not be "bolt", "rmd" is more better.
-var db = &Database{"bolt", "var/run/rmd.db", "bolt"}
+var db = &Database{"bolt", "/var/run/rmd/rmd.db", "rmd"}
 
 // NewConfig is Concurrency safe.
 func NewConfig() Database {
