@@ -3,7 +3,7 @@
 ## Prerequisite
 
 To use RMD, the users need to meet several requirements for both hardware and
-software. Please read the [this doc](../docs/Prerequisite.md) for more details.
+software. Please read [this doc](../docs/Prerequisite.md) for more details.
 
 ## Installation
 
@@ -13,18 +13,24 @@ need to install it to system path manually.
 ### Download
 
 The RMD executable binary files are hosted in github.com infrastructure, and
-you can find the download links from [release notes](TODO).
+you can find the download links from [release notes](https://github.com/intel/rmd/releases).
 
 ### Setup configuration file
+
+RMD has some default configurations, you may also find some configure file
+example from this [exmaple](../etc/rmd).
 
 Most of the configuration files are in [TOML](https://github.com/toml-lang/toml) format.
 Users can create their own configuration files by referring the following
 sample. And RMD also provides the script(cmd/gen_conf.go) to generate it
 by probing the local host platform capabilities for proper CachePool settings.
 
-<TODO: need to install the etc/rmd/* to system manually?>
+RMD will try to search `/usr/local/etc/rmd`, `/etc/rmd`, `./etc/rmd` to find
+configure files.
 
-Sample configuration file: (rmd.toml)
+Here's an sample for the main configure file of RMD.
+
+Sample configuration file: (/usr/local/etc/rmd/rmd.toml)
 ```
 [OSGroup] # mandatory
 cacheways = 1
@@ -81,8 +87,10 @@ several things by themselves.
 1. Create user and group 'rmd' in the target Linux system
 
     ```shell
-    $ sudo <TODO>
+    $ sudo useradd rmd
     ```
+    P.S. RMD itself will create a rmd user if that user does not existed.
+    
 2. Ensure the following packages are installed on your target system for PAM
 
     Debian or Ubuntu:
@@ -107,13 +115,15 @@ several things by themselves.
 Launch RMD manually, by specifying configuration directory:
 
 ```shell
-$ sudo rmd --conf-dir /etc/rmd
+$ sudo rmd --conf-dir /usr/local/etc/rmd
 ```
 
 *RMD can be launched in debug mode that exposes RESTAPI service on HTTP.
-By default it is launched on port 8081. (http://127.0.0.1:8081)*
+By default it is launched on port 8081. (http://127.0.0.1:8081)
 
-<TODO: prepare the systemd service file to install RMD service in standard way>
+```shell
+$ sudo rmd --debug 
+```*
 
 ## RMD service usages
 
@@ -160,20 +170,29 @@ is ambiguous to RMD.
 
 An example:
 
-1) Create a workload with gold policy.
+1) Create a workload with gold policy, let say you have a running process
+with process id `78377`
 
 ```shell
 $ curl -H "Content-Type: application/json" --request POST --data \
          '{"task_ids":["78377"], "policy": "gold"}' \
-         http://127.0.0.1:8888/v1/workloads
+         http://127.0.0.1:8081/v1/workloads
 ```
 
 2) Create workload with max_cache, min_cache.
 
 ```shell
 $ curl -H "Content-Type: application/json" --request POST --data \
-         '{"task_ids":["14988"], "max_cache": 4, "min_cache": 4}' \
+         '{"task_ids":["78377"], "max_cache": 4, "min_cache": 4}' \
          http://127.0.0.1:8888/v1/workloads
+```
+
+3) Delete a workload by the workload id, you will find it from the
+output of the create response.
+
+```shell
+$ curl -H "Content-Type: application/json" \
+        --request DELETE  http://127.0.0.1:8888/v1/workloads/${WORKLOAD_ID}
 ```
 
 Admin can change and add new policies by editing an toml/yaml file which is
