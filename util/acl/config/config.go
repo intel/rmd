@@ -38,7 +38,7 @@ var authmap = map[string]Author{
 }
 
 var once sync.Once
-var acl = &ACL{"/etc/rmd/acl/", "url", "", "", Signature}
+var acl = &ACL{"/usr/local/etc/rmd/acl/", "url", "", "", Signature}
 
 // NewACLConfig create new ACL config
 func NewACLConfig() *ACL {

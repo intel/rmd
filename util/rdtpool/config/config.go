@@ -14,7 +14,6 @@ type OSGroup struct {
 
 // InfraGroup represents infra group configuration
 type InfraGroup struct {
-	//OSGroup
 	CacheWays uint     `toml:"cacheways"`
 	CPUSet    string   `toml:"cpuset"`
 	Tasks     []string `toml:"tasks"`
@@ -35,7 +34,9 @@ var cachePoolConfigOnce sync.Once
 
 var infragroup = &InfraGroup{}
 var osgroup = &OSGroup{1, "0"}
-var cachepool = &CachePool{10, 0, 0, 0, false}
+
+// FIXME: the default may not work on some platform
+var cachepool = &CachePool{10, 10, 7, 2, false}
 
 // NewInfraConfig reads InfraGroup configuration
 func NewInfraConfig() *InfraGroup {

@@ -8,6 +8,12 @@ import (
 	"github.com/spf13/viper"
 )
 
+var defaultConfigPath = []string{
+	"/usr/local/etc/rmd/",
+	"/etc/rmd/",
+	"./etc/rmd",
+}
+
 // Init does config initial
 func Init() error {
 	viper.SetConfigName("rmd") // no need to include file extension
@@ -16,15 +22,14 @@ func Init() error {
 	if confDir != "" {
 		viper.AddConfigPath(confDir)
 	}
-	viper.AddConfigPath("/etc/rmd/")  // path to look for the config file in
-	viper.AddConfigPath("$HOME/rmd")  // call multiple times to add many search paths
-	viper.AddConfigPath("./etc/rmd/") // set the path of your config file
+	for _, p := range defaultConfigPath {
+		viper.AddConfigPath(p)
+	}
 	err := viper.ReadInConfig()
 	if err != nil {
 		// NOTE (ShaoHe Feng): only can use fmt.Println, can not use log.
 		// For log is not init at this point.
-		fmt.Println(err)
-		return err
+		fmt.Printf("No config file found from %v, fall back to using default setting\n", defaultConfigPath)
 	}
 	return nil
 }

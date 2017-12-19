@@ -64,11 +64,11 @@ var configOnce sync.Once
 var def = Default{
 	"localhost",
 	8443,
-	"etc/rmd/cert/server",
-	"etc/rmd/cert/client",
+	"/usr/local/etc/rmd/cert/server",
+	"/usr/local/etc/rmd/cert/client",
 	"challenge",
 	"",
-	"etc/rmd/policy.yaml",
+	"/usr/local/etc/rmd/policy.toml",
 }
 
 var db = Database{}

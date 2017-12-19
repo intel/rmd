@@ -2,6 +2,8 @@ package cpu
 
 import (
 	"github.com/spf13/viper"
+
+	"fmt"
 	"sync"
 )
 
@@ -22,6 +24,11 @@ type microArch struct {
 }
 
 var cpumapOnce sync.Once
+var defaultConfigPath = []string{
+	"/usr/local/etc/rmd/",
+	"/etc/rmd/",
+	"./etc/rmd",
+}
 
 // NewCPUMap init internal cpu map
 // Concurrency safe.
@@ -30,16 +37,16 @@ func NewCPUMap() map[uint32]string {
 		var rtViper = viper.New()
 		var maps = map[string][]microArch{}
 
-		// supported extensions are "json", "toml", "yaml", "yml", "properties", "props", "prop"
 		rtViper.SetConfigType("toml")
-		rtViper.SetConfigName("cpu_map")    // no need to include file extension
-		rtViper.AddConfigPath("/etc/rmd/")  // path to look for the config file in
-		rtViper.AddConfigPath("$HOME/rmd")  // call multiple times to add many search paths
-		rtViper.AddConfigPath("./etc/rmd/") // set the path of your config file
+		rtViper.SetConfigName("cpu_map")
+		for _, p := range defaultConfigPath {
+			viper.AddConfigPath(p)
+		}
 		err := rtViper.ReadInConfig()
 
 		if err != nil {
-			panic("Failed to Read from CPU config")
+			// TODO using log
+			fmt.Printf("No cpu map found from %v, fall back to using default cpu map\n", defaultConfigPath)
 		}
 
 		rtViper.Unmarshal(&maps)

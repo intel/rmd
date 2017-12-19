@@ -41,7 +41,7 @@ func LoadPolicy() (*CATConfig, error) {
 
 	if !strings.HasPrefix(configFileExt, ".") {
 		err := fmt.Errorf("Unknow policy file type extension %s", configFileExt)
-		log.Fatalf("error: %v", err)
+		log.Warnf("error: %v", err)
 		return nil, err
 	}
 
@@ -56,17 +56,16 @@ func LoadPolicy() (*CATConfig, error) {
 	r, err := ioutil.ReadFile(appconf.Def.PolicyPath)
 	if err != nil { // Handle errors reading the config file
 		err := fmt.Errorf("Fatal error config file: %s", err)
-		log.Fatalf("error: %v", err)
+		log.Warnf("error: %v", err)
 		return nil, err
 	}
 	runtimeViper := viper.New()
 	runtimeViper.SetConfigType(configType)
 	err = runtimeViper.ReadConfig(bytes.NewBuffer(r)) // Find and read the config file
-	if err != nil {                                   // Handle errors reading the config file
+	if err != nil {
 		err := fmt.Errorf("Fatal error config file: %s", err)
-		log.Fatalf("error: %v", err)
+		log.Warnf("error: %v", err)
 		return nil, err
-
 	}
 
 	c := CATConfig{}
@@ -115,10 +114,10 @@ func GetDefaultPlatformPolicy() ([]Policy, error) {
 func GetPolicy(cpu, policy string) (map[string]string, error) {
 	m := make(map[string]string)
 
-	platform, err := GetPlatformPolicy(cpu)
+	platform, err := GetPlatformPolicy(strings.ToLower(cpu))
 
 	if err != nil {
-		return m, fmt.Errorf("Can not find specified platform policy")
+		return m, fmt.Errorf("Can not find specified platform policy for %s", cpu)
 	}
 
 	var policyCandidate []Policy

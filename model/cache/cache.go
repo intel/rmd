@@ -219,13 +219,9 @@ func (c *Infos) GetByLevel(level uint32) *rmderror.AppError {
 			newCachdinfo.AvailableCPUs = cpuPools["all"][sc.ID].And(defaultCpus).ToHumanString()
 			newCachdinfo.AvailableIsoCPUs = cpuPools["isolated"][sc.ID].And(defaultCpus).ToHumanString()
 
-			p, err := policy.GetDefaultPlatformPolicy()
-			if err != nil {
-				return rmderror.NewAppError(http.StatusInternalServerError,
-					"Error to get policy", err)
-			}
+			p, _ := policy.GetDefaultPlatformPolicy()
+			// ignor policy error, p is an empty slice if policy file does not existed
 			ap := make(map[string]uint32)
-			//ap_counter := make(map[string]int)
 			for _, pv := range p {
 				// pv is policy.CATConfig.Catpolicy
 				for t := range pv {

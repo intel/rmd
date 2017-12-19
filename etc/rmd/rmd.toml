@@ -3,53 +3,53 @@
 title = "RMD config"
 
 [default]
-address = "localhost"
-policypath = "/etc/rmd/policy.toml"
-tlsport = 8443 # requires a port number higher than 1024
-# certpath = "etc/rmd/cert/server" # Only support pem format, hard code that CAFile is ca.pem, CertFile is rmd-cert.pem, KeyFile is rmd-key.pem
-# clientcapath = "etc/rmd/cert/client" # Only support pem format, hard code that CAFile is ca.pem
-clientauth = "challenge"  # can be "no, require, require_any, challenge_given, challenge", challenge means require and verify.
-# unixsock = "./var/run/rmd.sock"
+# address = "localhost"
+# policypath = "/user/local/etc/rmd/policy.toml"
+# tlsport = 8443 # requires a port number higher than 1024
+# certpath = "/usr/local/etc/rmd/cert/server" # Only support pem format, hard code that CAFile is ca.pem, CertFile is rmd-cert.pem, KeyFile is rmd-key.pem
+# clientcapath = "/usr/local/etc/rmd/cert/client" # Only support pem format, hard code that CAFile is ca.pem
+# clientauth = "challenge"  # can be "no, require, require_any, challenge_given, challenge", challenge means require and verify.
+# unixsock = "/var/run/rmd.sock"
 
 [debug]
-enabled = false
-debugport = 8081
+# enabled = false # allow rmd to run without any auth with http protocol
+# debugport = 8081
 
 [log]
-path = "/var/log/rmd.log"
-env = "dev"  # production or dev
-level = "debug"
-stdout = true
+# path = "/var/log/rmd/rmd.log"
+# env = "dev"  # production or dev
+# level = "debug"
+# stdout = true
 
 [database]
-backend = "bolt" # mgo
-transport = "/var/run/rmd.db" # mongodb://localhost
-dbname = "bolt" # RDTPolicy
+# backend = "bolt" # mgo
+# transport = "/var/run/rmd/rmd.db" # mongodb://localhost
+# dbname = "rmd"
 
 [OSGroup] # mandatory
-cacheways = 1
-cpuset = "0-1"
+# cacheways = 1
+# cpuset = "0"
 
 [InfraGroup] # optional
-cacheways = 19
-cpuset = "2-3"
+# cacheways = 19
+# cpuset = "2-3"
 # arrary or comma-separated values
-tasks = ["ovs*"] # just support Wildcards
+# tasks = ["ovs*"] # just support Wildcards
 
 [CachePool] # Cache Pool config is optional
-shrink = false # whether allow to shrink cache ways in best effort pool
-max_allowed_shared = 10 # max allowed workload in shared pool, default is 10
-guarantee = 10
-besteffort = 7
-shared = 2
+# shrink = false # whether allow to shrink cache ways in best effort pool
+# max_allowed_shared = 10 # max allowed workload in shared pool, default is 10
+# guarantee = 10
+# besteffort = 7
+# shared = 2
 
 [acl]
-path = "/etc/rmd/acl/"  #
+# path = "/usr/local/etc/rmd/acl/"#
 # use CSV format
-filter = "url" # at present just support "url", will support "url,ip,proto"
-authorization = "role" # authorize the client, can identify client by signature, role(OU) or username(CN). Default value is signature. If value is signature, admincert and usercert should be set.
-admincert = "/etc/rmd/acl/roles/admin/" # A cert is used to describe user info. These cert files in this path are used to define the users that are admin. Only pem format file at present. The files can be updated dynamically.
-usercert = "/etc/rmd/acl/roles/user/" # A cert is used to describe user info. These cert files in this path are used to define the user with low privilege. Only pem format file at present. The files can be updated dynamically.
+# filter = "url" # at present just support "url", will support "ip, proto"
+# authorization = "role" # authorize the client, can identify client by signature, role(OU) or username(CN). Default value is signature. If value is signature, admincert and usercert should be set.
+# admincert = "/usr/local/etc/rmd/acl/roles/admin/" # A cert is used to describe user info. These cert files in this path are used to define the users that are admin. Only pem format file at present. The files can be updated dynamically.
+# usercert = "/usr/local/etc/rmd/acl/roles/user/" # A cert is used to describe user info. These cert files in this path are used to define the user with low privilege. Only pem format file at present. The files can be updated dynamically
 
 [pam]
-service = "rmd"
+# service = "rmd"
