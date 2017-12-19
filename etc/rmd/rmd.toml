@@ -1,4 +1,4 @@
-# This is a rmd config.
+# RMD configuration
 
 title = "RMD config"
 
@@ -26,19 +26,18 @@ backend = "bolt" # mgo
 transport = "/var/run/rmd.db" # mongodb://localhost
 dbname = "bolt" # RDTPolicy
 
-
-[OSGroup] # OSGroup is mandatory
+[OSGroup] # mandatory
 cacheways = 1
 cpuset = "0-1"
 
-[InfraGroup] # InfraGroup is optional
+[InfraGroup] # optional
 cacheways = 19
 cpuset = "2-3"
-# arrary or comma-separated values? RMD supports array instead of CSV.
-tasks = ["ovs*"] # Just support Wildcards. Do we need to support RE?
+# arrary or comma-separated values
+tasks = ["ovs*"] # just support Wildcards
 
 [CachePool] # Cache Pool config is optional
-shrink = false # wether allow to shrink cache ways in best effort pool
+shrink = false # whether allow to shrink cache ways in best effort pool
 max_allowed_shared = 10 # max allowed workload in shared pool, default is 10
 guarantee = 10
 besteffort = 7
@@ -49,8 +48,8 @@ path = "/etc/rmd/acl/"  #
 # use CSV format
 filter = "url" # at present just support "url", will support "url,ip,proto"
 authorization = "role" # authorize the client, can identify client by signature, role(OU) or username(CN). Default value is signature. If value is signature, admincert and usercert should be set.
-admincert = "/etc/rmd/acl/roles/admin/" # A cert is used to describe user info. These cert files in this path are used to define the users that are admin. Only pem format file at present. The files can be updated dynamicly.
-usercert = "/etc/rmd/acl/roles/user/" # A cert is used to describe user info. These cert files in this path are used to define the user with low privilege. Only pem format file at present. The files can be updated dynamicly.
+admincert = "/etc/rmd/acl/roles/admin/" # A cert is used to describe user info. These cert files in this path are used to define the users that are admin. Only pem format file at present. The files can be updated dynamically.
+usercert = "/etc/rmd/acl/roles/user/" # A cert is used to describe user info. These cert files in this path are used to define the user with low privilege. Only pem format file at present. The files can be updated dynamically.
 
 [pam]
 service = "rmd"
