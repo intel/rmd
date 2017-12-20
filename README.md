@@ -35,7 +35,7 @@ RMD manages [Intel RDT](https://www.intel.com/content/www/us/en/architecture-and
 
 * **User friendly API**: Most (if not all) of the alternative ways to use RDT resources include manipulating bit masks，whereas RMD offers a user friendly RESTFul API that end users just need to specify the amount of the desired resources and some other attributes. RMD will convert that quantity into corresponding bit masks correctly and automatically.
 * **System level awareness**: One system may (and quite possible in a hyper-convergent deployment) host several software entities like OpenStack, Kubernates, Ceph and so on. Each of these software entities may have their built-in support for RDT resources but they may not have a system level view of all the competitors of RDT resources and thus lacks of coordination. Through RMD, these software entities can collaborate in resource consumption. RMD can be a system level resource orchestrator.
-* **Built-in intelligence**: **Though not supported yet**, in RMD road map, Machine Learning is one of the attractive incoming features which will provide intelligence to auto adjust resource usage according to user pre-defined policies and the pressure of resource contention. 
+* **Built-in intelligence**: **Though not supported yet**, in RMD road map, Machine Learning is one of the attractive incoming features which will provide intelligence to auto adjust resource usage according to user pre-defined policies and the pressure of resource contention.
 
 
 ### Cache Pools/Groups ###
@@ -47,7 +47,7 @@ RMD divides the system L3 cache into the following groups or pools. Each task of
 * **Best effort group**: Workloads allocating cache ways from this group have their minimal amount of desired cache ways guaranteed but can burst to their maximum amount of desired cache ways whenever possible. Cache ways in this group are also dedicated to their associated workloads, not shared with others except the infra group.
 * **Shared group**: Workloads allocating cache ways from the shared group shares the whole amount of cache ways assigned to the group.
 
-The amount of cache ways for each of the above groups are configurable in the RMD configuration file. Below diagram gives an example of a system of 11 cache ways. 
+The amount of cache ways for each of the above groups are configurable in the RMD configuration file. Below diagram gives an example of a system of 11 cache ways.
 
 ![RMD Groups](docs/pic/rmd_pools.png)
 
@@ -69,7 +69,7 @@ End users make their cache requirements by specifying two values ("max\_cache" a
 From a logical point of view, there are several components of RMD:
 
 * HTTPS server -- provides mutual (client and server) authentication and traffic encryption
-* RESTFul API provider -- accepts and sanitizes user requirements 
+* RESTFul API provider -- accepts and sanitizes user requirements
 * Policy engine -- decides whether to enforce or reject user requirement based on system resource status
 * Resctrl filesystem interface -- interacts with kernel resctrl interface to enforce user requirements
 
@@ -109,8 +109,7 @@ The hospitality score is calculated differently for workloads of different cache
 The "/policy" entry point contains the pre-defined recommended cache usage values for the specific platform that this RMD instance is running. Though completely configurable, the default policies are defined as "Gold/Sliver/Bronze" to classify different service levels. API user can get policies and associate workloads with one of the policies.
 
 ## Refereneces ##
-<!--- TODO documents  to be added -->
-[Deployment guide](docs/deployment_guide.md)   
+[Configuration guide](docs/ConfigurationGuide.md)
 
 [API Documentation](docs/api/v1/swagger.yaml)
 
