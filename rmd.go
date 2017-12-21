@@ -16,6 +16,8 @@ import (
 	"github.com/intel/rmd/util/log"
 	logconf "github.com/intel/rmd/util/log/config"
 	"github.com/intel/rmd/util/pidfile"
+	"github.com/intel/rmd/version"
+	"github.com/spf13/pflag"
 )
 
 var rmduser = "rmd"
@@ -24,6 +26,12 @@ func main() {
 	// use pipe pair to communicate between root and normal process
 	var in, out proxy.PipePair
 	flag.InitFlags()
+
+	if pflag.Lookup("version").Value.String() == "true" {
+		fmt.Printf("RMD version: %s (%s)\n", version.Info["version"], version.Info["revision"])
+		os.Exit(0)
+	}
+
 	if err := conf.Init(); err != nil {
 		fmt.Println("Init config failed:", err)
 		os.Exit(1)
