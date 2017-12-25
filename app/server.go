@@ -88,8 +88,12 @@ func Initialize(c *Config) (*restful.Container, error) {
 		return nil, err
 	}
 
-	if err := apptls.InitCertSignatures(); err != nil {
-		return nil, err
+	// By default, no admin/user cert path is configured, so don't initialize
+	// certification signature
+	if !c.Generic.Debug {
+		if err := apptls.InitCertSignatures(); err != nil {
+			return nil, err
+		}
 	}
 
 	wsContainer := restful.NewContainer()

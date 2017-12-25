@@ -40,7 +40,7 @@ func NewCPUMap() map[uint32]string {
 		rtViper.SetConfigType("toml")
 		rtViper.SetConfigName("cpu_map")
 		for _, p := range defaultConfigPath {
-			viper.AddConfigPath(p)
+			rtViper.AddConfigPath(p)
 		}
 		err := rtViper.ReadInConfig()
 

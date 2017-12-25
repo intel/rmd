@@ -69,12 +69,12 @@ besteffort = {{.besteffort}}
 shared = {{.shared}}
 
 [acl]
-# path = "/usr/local/etc/rmd/acl/"  #
+path = "/usr/local/etc/rmd/acl/"  #
 # use CSV format
-# filter = "url" # at present just support "url", will support "ip, proto"
+filter = "url" # at present just support "url", will support "ip, proto"
 authorization = "signature" # authorize the client, can identify client by signature, role(OU) or username(CN). Default value is signature. If value is signature, admincert and usercert should be set.
-# admincert = "/usr/local/etc/rmd/acl/roles/admin/" # A cert is used to describe user info. These cert files in this path are used to define the users that are admin. Only pem format file at present. The files can be updated dynamicly.
-# usercert = "/usr/local/etc/rmd/acl/roles/user/" # A cert is used to describe user info. These cert files in this path are used to define the user with low privilege. Only pem format file at present. The files can be updated dynamicly.
+admincert = "/usr/local/etc/rmd/acl/roles/admin/" # A cert is used to describe user info. These cert files in this path are used to define the users that are admin. Only pem format file at present. The files can be updated dynamicly.
+usercert = "/usr/local/etc/rmd/acl/roles/user/" # A cert is used to describe user info. These cert files in this path are used to define the user with low privilege. Only pem format file at present. The files can be updated dynamicly.
 
 [pam]
 service = "rmd"
