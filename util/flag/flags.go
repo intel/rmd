@@ -48,6 +48,7 @@ func InitFlags() {
 	pflag.String("address", "localhost", "Listen address")
 	pflag.Int("tlsport", 8443, "TLS listen port")
 	pflag.BoolP("debug", "d", false, "Enable debug")
+	pflag.BoolP("version", "", false, "Print RMD version")
 	pflag.String("unixsock", "", "Unix sock file path")
 	pflag.Int("debugport", 8081, "Debug listen port")
 	pflag.String("conf-dir", "", "Directy of config file")
