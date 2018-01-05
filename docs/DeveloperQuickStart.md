@@ -5,8 +5,8 @@
 Follow https://golang.org/doc/install to install golang.
 Make sure you have your $GOPATH, $PATH setup correctly
 
-```
 e.g.
+```
 export GOPATH=$HOME/go
 export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 # check if your go environment variables are set correctly
@@ -15,7 +15,9 @@ go env
 
 ## Get rmd
 
+```
 $ go get github.com/intel/rmd
+```
 
 ## Build & install rmd
 
@@ -51,9 +53,10 @@ Alternatively, you can run `make check` to do a full static code checking.
 Bash shell script `test.sh` is a helper script to do unit testing and
 functional testing.
 
-`sudo -E ./test.sh -u` to run all unit test cases or just `sudo make test-unit`
+`sudo -E scripts/test.sh -u` to run all unit test cases or just do
+`sudo make test-unit`
 
-P.S. There are issues where the in the unit test case, some of them depends
+P.S. There is an issue when do the unit test case, some of the cases depend
 on configuration file, to pass unit test case, better to install rmd first
 by `sudo make install` or manually copy etc/rmd to /etc/rmd.
 
@@ -80,7 +83,7 @@ Use glide (https://github.com/Masterminds/glide) to manage dependencies.
 
 ## Swagger
 
-The API definitions are located under docs/v1/swagger.yaml
+The API definitions are located under [swagger yaml](api/v1/swagger.yaml)
 
-Upload docs/api/v1/swagger.yaml to http://editor.swagger.io/#!/ to generate
+Upload [swagger yaml](api/v1/swagger.yaml) to http://editor.swagger.io/#!/ to generate
 a client.
