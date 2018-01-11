@@ -1,7 +1,39 @@
+language: go
 sudo: required
+addons:
+    apt:
+        packages:
+            - fakeroot
+            - openssl
+            - libpam0g-dev
+            - db-util
+go:
+    - 1.8
+    - 1.9
+    - tip
+
+before_install:
+    - if [ "${JOB}" = "check" ]; then go get -v github.com/golang/lint/golint; fi
+
+script:
+    - 'if [ "${JOB}" = "docker" ]; then make docker; fi'
+    - 'if [ "${JOB}" = "deb" ]; then make deb; fi'
+    - 'if [ "${JOB}" = "rpm" ]; then make rpm; fi'
+    - 'if [ "${JOB}" = "check" ]; then make check; fi'
+
+env:
+    global:
+        - GOARCH=amd64
+    matrix:
+        - JOB=docker
+        - JOB=deb
+        - JOB=rpm
+        - JOB=check
+
+notifications:
+      email:
+          on_success: change
+          on_failure: always
 
 services:
         - docker
-
-script:
-        - docker build -t rmd .
