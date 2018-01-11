@@ -39,7 +39,7 @@ func GetInfraGroupReserve() (base.Reserved, error) {
 	var returnErr error
 	infraOnce.Do(func() {
 		conf := config.NewInfraConfig()
-		if conf == nil {
+		if conf == nil || conf.CacheWays == 0 {
 			return
 		}
 		infraCPUbm, err := base.CPUBitmaps([]string{conf.CPUSet})
@@ -102,7 +102,7 @@ func GetInfraGroupReserve() (base.Reserved, error) {
 // SetInfraGroup sets infra resource group based on configuration
 func SetInfraGroup() error {
 	conf := config.NewInfraConfig()
-	if conf == nil {
+	if conf == nil || conf.CacheWays == 0 {
 		return nil
 	}
 
