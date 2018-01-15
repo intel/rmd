@@ -1,0 +1,34 @@
+{
+  "name": "rmd",
+  "maintainer": "intel-rmd <intel-rmd@intel.com>",
+  "description": "Resource management daemon",
+  "homepage": "https://github.com/intel/rmd",
+  "files": [
+    {
+      "from": "build/linux/x86_64/!name!",
+      "to": "/usr/local/sbin/",
+      "base": "build/!arch!",
+      "fperm": "0755"
+    },
+    {
+      "from": "etc/**/**",
+      "to": "/usr/local"
+    }
+  ],
+  "copyrights": [
+    {
+      "files": "*",
+      "copyright": "2017 intel-rmd <intel-rmd@intel.com>",
+      "license": "GPL-2",
+      "file": "LICENSE"
+    }
+  ],
+  "pre-depends": [
+      "openssl",
+      "libpam0g-dev"
+  ],
+  "systemd-file": "deb/rmd.service",
+  "postinst-file": "deb/postinst.sh",
+  "postrm-file": "deb/postrm.sh",
+  "prerm-file": "deb/prerm.sh"
+}
