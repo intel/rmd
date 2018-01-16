@@ -24,15 +24,15 @@ $ go get github.com/intel/rmd
 ## Build & install rmd
 
 ```
-# build rmd
+# build rmd, only support linux host(GOOS=Linux)
 $ cd ${GOPATH}/src/github.com/intel/rmd
 $ make
-# You will fine the binary under ${GOPATH}/src/github.com/intel/rmd/build
+# You will find the rmd binary under ${GOPATH}/src/github.com/intel/rmd/build
 
 # install RMD
 $ sudo make install
-# this will install RMD into /usr/local/sbin/ along with some default
-configuration file under /etc/rmd
+# This will install RMD into /usr/local/sbin/ along with some default
+configuration files under /usr/local/etc/rmd
 ```
 
 ## Run rmd
