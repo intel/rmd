@@ -69,7 +69,7 @@ func buildServerConfig() *Config {
 	swaggerconfig := swagger.Config{
 		WebServicesUrl: fmt.Sprintf("http://%s:%d", appconfig.Def.Address, appconfig.Dbg.Debugport),
 		ApiPath:        "/apidocs.json",
-		SwaggerPath:    "/apidocs/", // Optionally, specifiy where the UI is located
+		SwaggerPath:    "/apidocs/", // Optionally, specify where the UI is located
 		// FIXME this depends on https://github.com/swagger-api/swagger-ui.git need to copy dist from it
 		SwaggerFilePath: "/usr/local/share/go/src/github.com/wordnik/swagger-ui/dist",
 		ApiVersion:      "1.0",

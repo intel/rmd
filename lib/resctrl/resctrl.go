@@ -45,7 +45,7 @@ func NewNotFoundError(res string) error {
 	}
 }
 
-// IsNotFound returns if notfound error happend
+// IsNotFound returns if notfound error happened
 func IsNotFound(err error) bool {
 	if err == nil {
 		return false

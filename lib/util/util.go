@@ -191,9 +191,9 @@ func GenerateBitMap(coreids []string, num int) (string, error) {
 }
 
 // IsZeroHexString is zero hex string
-// No varification for input s.
+// No verification for input s.
 // Such as whitespace in "0x11, 22" and "g" in "0xg1111"
-// Caller do varification.
+// Caller do verification.
 func IsZeroHexString(s string) bool {
 	s = strings.TrimPrefix(strings.TrimPrefix(s, "0x"), "0X")
 	s = strings.Replace(s, ",", "", -1)
