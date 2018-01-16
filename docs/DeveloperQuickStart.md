@@ -5,6 +5,8 @@
 Follow https://golang.org/doc/install to install golang.
 Make sure you have your $GOPATH, $PATH setup correctly
 
+*Note: only support build RMD on linux host(GOOS=Linux)*
+
 e.g.
 ```
 export GOPATH=$HOME/go
