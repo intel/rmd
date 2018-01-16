@@ -45,7 +45,7 @@ func TestNewBitmapIntersection(t *testing.T) {
 	// r.Bits[0]
 	len := len(r.Bits)
 	if len != 2 {
-		t.Error("The length of intersection of bit maps should be %d, but get %d.",
+		t.Errorf("The length of intersection of bit maps should be %d, but get %d.",
 			minlen/32, len)
 	}
 	if r.Bits[0] != 0x2C0 || r.Bits[1] != 0x1FFFF {
@@ -77,7 +77,7 @@ func TestNewBitmapAsymmetricDiff(t *testing.T) {
 	r = m.Axor(b)
 	len := len(r.Bits)
 	if len != 2 {
-		t.Error("The length of intersection of bit maps should be %d, but get %d.",
+		t.Errorf("The length of intersection of bit maps should be %d, but get %d.",
 			minlen/32, len)
 	}
 	if r.Bits[0] != 0x100 || r.Bits[1] != 0x0 {
@@ -119,7 +119,7 @@ func TestBitmapToBinStrings(t *testing.T) {
 	ss := b.ToBinStrings()
 
 	if len(ss) != 12 {
-		t.Error("The length of bit maps string sliece should be %d, but get %d.",
+		t.Errorf("The length of bit maps string sliece should be %d, but get %d.",
 			12, len(ss))
 	}
 }
