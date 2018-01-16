@@ -111,6 +111,19 @@ several things by themselves.
     ```
     *Note: Only root user can setup or access users in Berkeley database*
 
+## Run in docker container
+
+### Build RMD docker image
+Make sure you have install docker service.
+
+```
+$ sudo make docker
+# Run RMD in docker
+$ sudo docker run  --privileged -v /proc:/proc \
+        -v /sys/fs/resctrl:/sys/fs/resctrl:rw \
+        --address 0.0.0.0
+```
+
 ## Run the service
 
 Launch RMD manually, by specifying configuration directory:
