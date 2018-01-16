@@ -58,7 +58,6 @@ cpuset = "0-1"
 [InfraGroup] # InfraGroup is optional
 cacheways = {{.infra_cacheways}}
 cpuset = "2-3"
-# arrary or comma-separated values? RMD supports array instead of CSV.
 tasks = ["ovs*"] # Just support Wildcards. Do we need to support RE?
 
 [CachePool] # Cache Pool config is optional

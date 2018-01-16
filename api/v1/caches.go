@@ -101,7 +101,7 @@ func (cache CachesResource) CacheGet(request *restful.Request, response *restful
 	// FIXME : should use pattern, \d\{1,3\}
 	id, err := strconv.Atoi(request.PathParameter("id"))
 	if err != nil {
-		err := fmt.Errorf("Please input the correct id, it shoudl be digital")
+		err := fmt.Errorf("Please input the correct id, it should be digital")
 		response.WriteError(http.StatusBadRequest, err)
 		return
 	}

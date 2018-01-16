@@ -179,7 +179,7 @@ func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
 			"Error to commit resource group for workload.", err)
 	}
 
-	// loop to change shrinked resource
+	// loop to change shrunk resource
 	// TODO: there's corners if there are multiple changed resource groups,
 	// but we failed to commit one of them (worest case is the last group),
 	// there's no rollback.
@@ -187,7 +187,7 @@ func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
 	for name, res := range changedRes {
 		log.Debugf("Shink %s group", name)
 		if err = proxyclient.Commit(res, name); err != nil {
-			log.Errorf("Error while try to commit shrinked resource group, name: %s", name)
+			log.Errorf("Error while try to commit shrunk resource group, name: %s", name)
 			proxyclient.DestroyResAssociation(grpName)
 			return rmderror.NewAppError(http.StatusInternalServerError,
 				"Error to shrink resource group", err)
@@ -506,7 +506,7 @@ func shrinkBEPool(resaall map[string]*resctrl.ResAssociation,
 	// reduce cos
 	candidateSchemata := availableSchemata.GetConnectiveBits(reqways, 0, true)
 
-	// loop besteffortRes to find which assocation need to be changed.
+	// loop besteffortRes to find which association need to be changed.
 	changedRes := make(map[string]*resctrl.ResAssociation)
 	for name, v := range besteffortRes {
 		cosSchemata, _ := rmdbase.CacheBitmaps(v.Schemata["L"+targetLev][cacheID].Mask)

@@ -126,8 +126,8 @@ func (h *Hospitality) GetByRequestMaxMin(max, min uint32, cacheIDuint *uint32, t
 			}
 		}
 		if cacheS[k] > 0 {
-			// (NOTES): Gurantee will return 0|100
-			// Besteffort will return (max continious ways) / max
+			// (NOTES): Guarantee will return 0|100
+			// Besteffort will return (max continuous ways) / max
 			cacheS[k] = (cacheS[k] * 100) / max
 			if cacheS[k] > 100 {
 				cacheS[k] = 100

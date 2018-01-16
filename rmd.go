@@ -82,7 +82,7 @@ func main() {
 		child, err := util.DropRunAs(rmduser, logconf.NewConfig().Stdout, in.Writer, in.Reader)
 
 		if err != nil {
-			fmt.Println("Failed to drop root priviledge")
+			fmt.Println("Failed to drop root privilege")
 			os.Exit(1)
 		}
 
