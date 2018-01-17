@@ -19,7 +19,7 @@
     {
       "files": "*",
       "copyright": "2017 intel-rmd <intel-rmd@intel.com>",
-      "license": "GPL-2",
+      "license": "Apache-2.0",
       "file": "LICENSE"
     }
   ],
@@ -27,8 +27,8 @@
       "openssl",
       "libpam0g-dev"
   ],
-  "systemd-file": "deb/rmd.service",
-  "postinst-file": "deb/postinst.sh",
-  "postrm-file": "deb/postrm.sh",
-  "prerm-file": "deb/prerm.sh"
+  "systemd-file": "packaging/rmd.service",
+  "postinst-file": "packaging/postinst.sh",
+  "postrm-file": "packaging/postrm.sh",
+  "prerm-file": "packaging/prerm.sh"
 }

@@ -2,6 +2,8 @@
 *.exe
 *.o
 *.a
+*.deb
+*.rpm
 .idea/
 vendor/
 build/
