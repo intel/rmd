@@ -12,3 +12,4 @@ go get github.com/Masterminds/glide && glide install
 # glide install
 # go install
 go get github.com/mh-cbon/go-bin-deb
+go get github.com/mh-cbon/go-bin-rpm
