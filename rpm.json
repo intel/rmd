@@ -1,0 +1,33 @@
+{
+  "name": "rmd",
+  "maintainer": "intel-rmd <intel-rmd@intel.com>",
+  "summary": "Resource management daemon",
+  "description": "Resource Management Daemon (RMD) is a system daemon running on generic Linux platforms. The purpose of this daemon is to provide a central uniform interface portal for hardware resource management tasks on x86 platforms.",
+  "license": "Apache-2.0",
+  "url": "https://github.com/intel/rmd",
+  "files": [
+    {
+      "from": "build/linux/x86_64/!name!",
+      "to": "/usr/local/sbin/",
+      "base": "build/linux",
+      "fperm": "0755"
+    },
+    {
+      "from": "etc/**/**",
+      "to": "/usr/local"
+    },
+    {
+      "from": "packaging/rmd.service",
+      "to": "/lib/systemd/system/",
+      "base": "packaging"
+    }
+  ],
+  "requires": [
+      "openssl",
+      "pam-devel",
+      "db4-utils"
+  ],
+  "postinst": "packaging/postinst.sh",
+  "prerm": "packaging/prerm.sh",
+  "postrm": "packaging/postrm.sh"
+}
