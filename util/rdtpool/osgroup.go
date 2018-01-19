@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/intel/rmd/lib/cache"
+	syscache "github.com/intel/rmd/lib/cache"
 	"github.com/intel/rmd/lib/proxyclient"
 	util "github.com/intel/rmd/lib/util"
 	"github.com/intel/rmd/util/rdtpool/base"

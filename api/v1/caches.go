@@ -9,7 +9,7 @@ import (
 	"github.com/emicklei/go-restful"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/intel/rmd/lib/cache"
+	syscache "github.com/intel/rmd/lib/cache"
 	m_cache "github.com/intel/rmd/model/cache"
 )
 
