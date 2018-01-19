@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	libcache "github.com/intel/rmd/lib/cache"
+	syscache "github.com/intel/rmd/lib/cache"
 	"github.com/intel/rmd/lib/cpu"
 	"github.com/intel/rmd/lib/proc"
 	"github.com/intel/rmd/lib/proxyclient"
@@ -66,7 +66,7 @@ func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
 		return err
 	}
 
-	targetLev := strconv.FormatUint(uint64(libcache.GetLLC()), 10)
+	targetLev := strconv.FormatUint(uint64(syscache.GetLLC()), 10)
 	av, err := rdtpool.GetAvailableCacheSchemata(resaall, []string{"infra", "."}, er.Type, "L"+targetLev)
 	if err != nil {
 		return rmderror.NewAppError(http.StatusInternalServerError,
@@ -398,7 +398,7 @@ func populateEnforceRequest(req *tw.EnforceRequest, w *tw.RDTWorkLoad) *rmderror
 	}
 
 	cacheinfo := &cache.Infos{}
-	cacheinfo.GetByLevel(libcache.GetLLC())
+	cacheinfo.GetByLevel(syscache.GetLLC())
 
 	cpunum := cpu.HostCPUNum()
 	if cpunum == 0 {
@@ -482,7 +482,7 @@ func shrinkBEPool(resaall map[string]*resctrl.ResAssociation,
 	dbc, _ := db.NewDB()
 	// do a copy
 	availableSchemata := &(*reservedSchemata)
-	targetLev := strconv.FormatUint(uint64(libcache.GetLLC()), 10)
+	targetLev := strconv.FormatUint(uint64(syscache.GetLLC()), 10)
 	for name, v := range resaall {
 		if strings.HasSuffix(name, "-"+rdtpool.Besteffort) {
 			besteffortRes[name] = v

@@ -9,7 +9,7 @@ import (
 
 	rmderror "github.com/intel/rmd/api/error"
 	"github.com/intel/rmd/db"
-	libcache "github.com/intel/rmd/lib/cache"
+	syscache "github.com/intel/rmd/lib/cache"
 	"github.com/intel/rmd/lib/proxyclient"
 	"github.com/intel/rmd/model/policy"
 	"github.com/intel/rmd/util/rdtpool"
@@ -44,7 +44,7 @@ type Hospitality struct {
 
 // GetByRequest returns hospitality score by request
 func (h *Hospitality) GetByRequest(req *Request) error {
-	level := libcache.GetLLC()
+	level := syscache.GetLLC()
 	targetLev := strconv.FormatUint(uint64(level), 10)
 	cacheLevel := "l" + targetLev
 	cacheS := make(map[string]uint32)

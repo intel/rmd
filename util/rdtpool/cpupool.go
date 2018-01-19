@@ -3,7 +3,7 @@ package rdtpool
 import (
 	"sync"
 
-	"github.com/intel/rmd/lib/cache"
+	syscache "github.com/intel/rmd/lib/cache"
 	"github.com/intel/rmd/lib/cpu"
 	util "github.com/intel/rmd/lib/util"
 	"github.com/intel/rmd/util/rdtpool/base"

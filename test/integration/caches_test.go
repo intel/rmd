@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/gavv/httpexpect.v1"
 
-	"github.com/intel/rmd/lib/cache"
+	syscache "github.com/intel/rmd/lib/cache"
 	"github.com/intel/rmd/test/test_helpers"
 )
 

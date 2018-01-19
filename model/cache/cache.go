@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	rmderror "github.com/intel/rmd/api/error"
-	"github.com/intel/rmd/lib/cache"
+	syscache "github.com/intel/rmd/lib/cache"
 	"github.com/intel/rmd/lib/cpu"
 	"github.com/intel/rmd/lib/proc"
 	"github.com/intel/rmd/lib/resctrl"

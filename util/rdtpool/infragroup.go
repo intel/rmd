@@ -3,15 +3,15 @@ package rdtpool
 import (
 	"fmt"
 	"github.com/gobwas/glob"
-	"github.com/intel/rmd/lib/cache"
-	"github.com/intel/rmd/lib/proc"
-	"github.com/intel/rmd/lib/resctrl"
 	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
 	"sync"
 
+	syscache "github.com/intel/rmd/lib/cache"
+	"github.com/intel/rmd/lib/proc"
 	"github.com/intel/rmd/lib/proxyclient"
+	"github.com/intel/rmd/lib/resctrl"
 	util "github.com/intel/rmd/lib/util"
 	"github.com/intel/rmd/util/rdtpool/base"
 	"github.com/intel/rmd/util/rdtpool/config"

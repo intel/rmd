@@ -1,6 +1,6 @@
 // +build linux
 
-package syscache
+package cache
 
 import (
 	"io/ioutil"
