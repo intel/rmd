@@ -28,23 +28,24 @@ var SizeMap = map[string]uint32{
 
 // Info is details of cache
 type Info struct {
-	ID               uint32 `json:"cache_id"`
-	NumWays          uint32
-	NumSets          uint32
-	NumPartitions    uint32
-	LineSize         uint32
-	TotalSize        uint32 `json:"total_size"`
-	WaySize          uint32
-	NumClasses       uint32
-	WayContention    uint64
-	CacheLevel       uint32
-	Location         string            `json:"location_on_socket"`
-	Node             string            `json:"location_on_node"`
-	ShareCPUList     string            `json:"share_cpu_list"`
-	AvailableWays    string            `json:"available_ways"`
-	AvailableCPUs    string            `json:"available_cpus"`
-	AvailableIsoCPUs string            `json:"available_isolated_cpus"`
-	AvailablePolicy  map[string]uint32 `json:"available_policy"` // should move out here
+	ID                uint32 `json:"cache_id"`
+	NumWays           uint32
+	NumSets           uint32
+	NumPartitions     uint32
+	LineSize          uint32
+	TotalSize         uint32 `json:"total_size"`
+	WaySize           uint32
+	NumClasses        uint32
+	WayContention     uint64
+	CacheLevel        uint32
+	Location          string            `json:"location_on_socket"`
+	Node              string            `json:"location_on_node"`
+	ShareCPUList      string            `json:"share_cpu_list"`
+	AvailableWays     string            `json:"available_ways"`
+	AvailableCPUs     string            `json:"available_cpus"`
+	AvailableIsoCPUs  string            `json:"available_isolated_cpus"`
+	AvailablePolicy   map[string]uint32 `json:"available_policy"` // should move out here
+	AvailableWaysPool map[string]string `json:"available_ways_pool"`
 }
 
 // Infos is group of cache info
@@ -177,6 +178,11 @@ func (c *Infos) GetByLevel(level uint32) *rmderror.AppError {
 
 	allres := resctrl.GetResAssociation()
 	av, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra"}, "none", cacheLevel)
+	av_guarantee, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "guarantee", cacheLevel)
+	av_besteffort, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "besteffort", cacheLevel)
+	av_shared, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "shared", cacheLevel)
+	av_infra, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "infra", cacheLevel)
+	av_os, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "os", cacheLevel)
 
 	c.Caches = make(map[uint32]Info)
 
@@ -213,6 +219,14 @@ func (c *Infos) GetByLevel(level uint32) *rmderror.AppError {
 			newCachdinfo.Node = cpu.LocateOnNode(cpuid)
 
 			newCachdinfo.AvailableWays = av[sc.ID].ToString()
+
+			avp := make(map[string]string)
+			avp["guaranteed"] = av_guarantee[sc.ID].ToHumanString()
+			avp["besteffort"] = av_besteffort[sc.ID].ToHumanString()
+			avp["shared"] = av_shared[sc.ID].ToHumanString()
+			avp["infra"] = av_infra[sc.ID].ToHumanString()
+			avp["os"] = av_os[sc.ID].ToHumanString()
+			newCachdinfo.AvailableWaysPool = avp
 
 			cpuPools, _ := rdtpool.GetCPUPools()
 			defaultCpus, _ := base.CPUBitmaps(resctrl.GetResAssociation()["."].CPUs)
