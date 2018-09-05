@@ -221,11 +221,21 @@ func (c *Infos) GetByLevel(level uint32) *rmderror.AppError {
 			newCachdinfo.AvailableWays = av[sc.ID].ToString()
 
 			avp := make(map[string]string)
-			avp["guaranteed"] = av_guarantee[sc.ID].ToHumanString()
-			avp["besteffort"] = av_besteffort[sc.ID].ToHumanString()
-			avp["shared"] = av_shared[sc.ID].ToHumanString()
-			avp["infra"] = av_infra[sc.ID].ToHumanString()
-			avp["os"] = av_os[sc.ID].ToHumanString()
+			if _, ok = av_guarantee[sc.ID]; ok {
+				avp["guaranteed"] = av_guarantee[sc.ID].ToHumanString()
+			}
+			if _, ok = av_besteffort[sc.ID]; ok {
+				avp["besteffort"] = av_besteffort[sc.ID].ToHumanString()
+			}
+			if _, ok = av_shared[sc.ID]; ok {
+				avp["shared"] = av_shared[sc.ID].ToHumanString()
+			}
+			if _, ok = av_infra[sc.ID]; ok {
+				avp["infra"] = av_infra[sc.ID].ToHumanString()
+			}
+			if _, ok = av_os[sc.ID]; ok {
+				avp["os"] = av_os[sc.ID].ToHumanString()
+			}
 			newCachdinfo.AvailableWaysPool = avp
 
 			cpuPools, _ := rdtpool.GetCPUPools()
