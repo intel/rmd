@@ -185,7 +185,7 @@ func parserResAssociation(basepath string, ignore []string, ps map[string]*ResAs
 // https://gist.github.com/ericchiang/ce0fdcac5659d0a80b38
 // now we can use lib/flock/flock.go
 func GetResAssociation() map[string]*ResAssociation {
-	ignore := []string{"info"}
+	ignore := []string{"info", "mon_data", "mon_groups"}
 	ress := make(map[string]*ResAssociation)
 	filepath.Walk(SysResctrl, parserResAssociation(SysResctrl, ignore, ress))
 	return ress
