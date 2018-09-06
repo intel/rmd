@@ -118,7 +118,9 @@ func GetAvailableCacheSchemata(allres map[string]*resctrl.ResAssociation,
 				if cv.Mask == base.GetCosInfo().CbmMask {
 					continue
 				}
-				schemata[k] = schemata[k].Axor(bm)
+				if _, ok = schemata[k]; ok {
+					schemata[k] = schemata[k].Axor(bm)
+				}
 			}
 		}
 	}
