@@ -178,11 +178,11 @@ func (c *Infos) GetByLevel(level uint32) *rmderror.AppError {
 
 	allres := resctrl.GetResAssociation()
 	av, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra"}, "none", cacheLevel)
-	av_guarantee, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "guarantee", cacheLevel)
-	av_besteffort, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "besteffort", cacheLevel)
-	av_shared, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "shared", cacheLevel)
-	av_infra, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "infra", cacheLevel)
-	av_os, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "os", cacheLevel)
+	avGuarantee, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "guarantee", cacheLevel)
+	avBesteffort, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "besteffort", cacheLevel)
+	avShared, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "shared", cacheLevel)
+	avInfra, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "infra", cacheLevel)
+	avOs, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "os", cacheLevel)
 
 	c.Caches = make(map[uint32]Info)
 
@@ -221,20 +221,20 @@ func (c *Infos) GetByLevel(level uint32) *rmderror.AppError {
 			newCachdinfo.AvailableWays = av[sc.ID].ToString()
 
 			avp := make(map[string]string)
-			if _, ok = av_guarantee[sc.ID]; ok {
-				avp["guaranteed"] = av_guarantee[sc.ID].ToHumanString()
+			if _, ok = avGuarantee[sc.ID]; ok {
+				avp["guaranteed"] = avGuarantee[sc.ID].ToHumanString()
 			}
-			if _, ok = av_besteffort[sc.ID]; ok {
-				avp["besteffort"] = av_besteffort[sc.ID].ToHumanString()
+			if _, ok = avBesteffort[sc.ID]; ok {
+				avp["besteffort"] = avBesteffort[sc.ID].ToHumanString()
 			}
-			if _, ok = av_shared[sc.ID]; ok {
-				avp["shared"] = av_shared[sc.ID].ToHumanString()
+			if _, ok = avShared[sc.ID]; ok {
+				avp["shared"] = avShared[sc.ID].ToHumanString()
 			}
-			if _, ok = av_infra[sc.ID]; ok {
-				avp["infra"] = av_infra[sc.ID].ToHumanString()
+			if _, ok = avInfra[sc.ID]; ok {
+				avp["infra"] = avInfra[sc.ID].ToHumanString()
 			}
-			if _, ok = av_os[sc.ID]; ok {
-				avp["os"] = av_os[sc.ID].ToHumanString()
+			if _, ok = avOs[sc.ID]; ok {
+				avp["os"] = avOs[sc.ID].ToHumanString()
 			}
 			newCachdinfo.AvailableWaysPool = avp
 
