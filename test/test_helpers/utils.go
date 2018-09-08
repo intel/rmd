@@ -76,9 +76,9 @@ func AssembleRequest(processes []*os.Process, coreIds []string, maxCache, minCac
 
 func ConfigInit(path string) error {
 	viper.SetConfigType("toml")
-	viper.SetConfigName("rmd")  // name of config file (without extension)
-	viper.AddConfigPath("/tmp") // path to look for the config file in
-	err := viper.ReadInConfig() // Find and read the config file
+	viper.SetConfigName("rmd") // name of config file (without extension)
+	viper.AddConfigPath("/tmp")     // path to look for the config file in
+	err := viper.ReadInConfig()     // Find and read the config file
 	return err
 }
 

@@ -63,7 +63,7 @@ func buildServerConfig() *Config {
 		Transport:              appconfig.Db.Transport,
 		DBName:                 appconfig.Db.DBName,
 		IsClientCertAuthOption: isClientCertAuthOption,
-		Debug:                  appconfig.Dbg.Enabled,
+		Debug: appconfig.Dbg.Enabled,
 	}
 
 	swaggerconfig := swagger.Config{
