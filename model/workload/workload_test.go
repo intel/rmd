@@ -3,10 +3,10 @@ package workload
 import (
 	"testing"
 
-	. "github.com/prashantv/gostub"
-	. "github.com/smartystreets/goconvey/convey"
 	"github.com/intel/rmd/lib/proc"
 	"github.com/intel/rmd/model/cache"
+	. "github.com/prashantv/gostub"
+	. "github.com/smartystreets/goconvey/convey"
 
 	tw "github.com/intel/rmd/model/types/workload"
 )
