@@ -5,13 +5,11 @@ import (
 	"strconv"
 	"sync"
 
-	rmderror "github.com/intel/rmd/api/error"
 	syscache "github.com/intel/rmd/lib/cache"
 	"github.com/intel/rmd/lib/proxyclient"
-	util "github.com/intel/rmd/lib/util"
+	"github.com/intel/rmd/lib/util"
 	"github.com/intel/rmd/util/rdtpool/base"
 	"github.com/intel/rmd/util/rdtpool/config"
-	"net/http"
 )
 
 var osGroupReserve = &base.Reserved{}
@@ -94,8 +92,7 @@ func SetOSGroup() error {
 	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
 	schemata, err := GetAvailableCacheSchemata(allres, []string{"infra", "."}, "none", cacheLevel)
 	if err != nil {
-		return rmderror.NewAppError(http.StatusInternalServerError,
-			"Error to get cache schemata", err)
+		return err
 	}
 
 	for i, v := range osGroup.Schemata[cacheLevel] {
