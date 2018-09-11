@@ -14,6 +14,7 @@ import (
 	"github.com/intel/rmd/model/policy"
 	"github.com/intel/rmd/util/rdtpool"
 	log "github.com/sirupsen/logrus"
+	"strings"
 )
 
 // Request represents the hospitality request
@@ -85,7 +86,11 @@ func (h *Hospitality) GetByRequestMaxMin(max, min uint32, cacheIDuint *uint32, t
 
 	resaall := proxyclient.GetResAssociation()
 
-	av, _ := rdtpool.GetAvailableCacheSchemata(resaall, []string{"infra", "."}, reqType, "L"+targetLev)
+	av, err := rdtpool.GetAvailableCacheSchemata(resaall, []string{"infra", "."}, reqType, "L"+targetLev)
+	if err != nil && !strings.Contains(err.Error(), "error doesn't support pool") {
+		return rmderror.AppErrorf(http.StatusInternalServerError,
+			"Unable to read cache schemata; %s", err.Error())
+	}
 
 	cacheS := make(map[string]uint32)
 	h.SC = map[string]CacheScore{"l" + targetLev: cacheS}

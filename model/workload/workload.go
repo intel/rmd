@@ -69,8 +69,8 @@ func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
 	targetLev := strconv.FormatUint(uint64(syscache.GetLLC()), 10)
 	av, err := rdtpool.GetAvailableCacheSchemata(resaall, []string{"infra", "."}, er.Type, "L"+targetLev)
 	if err != nil {
-		return rmderror.NewAppError(http.StatusInternalServerError,
-			"Error to get available cache", err)
+		return rmderror.AppErrorf(http.StatusInternalServerError,
+			"Unable to read cache schemata; %s", err.Error())
 	}
 
 	reserved := rdtpool.GetReservedInfo()

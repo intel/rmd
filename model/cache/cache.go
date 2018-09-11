@@ -177,12 +177,41 @@ func (c *Infos) GetByLevel(level uint32) *rmderror.AppError {
 	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
 
 	allres := resctrl.GetResAssociation()
-	av, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra"}, "none", cacheLevel)
-	avGuarantee, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "guarantee", cacheLevel)
-	avBesteffort, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "besteffort", cacheLevel)
-	avShared, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "shared", cacheLevel)
-	avInfra, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "infra", cacheLevel)
-	avOs, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "os", cacheLevel)
+	av, err := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra"}, "none", cacheLevel)
+	if err != nil {
+		return rmderror.AppErrorf(http.StatusInternalServerError,
+			"Unable to read cache schemata; %s", err.Error())
+	}
+
+	avGuarantee, err := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "guarantee", cacheLevel)
+	if err != nil && !strings.Contains(err.Error(), "error doesn't support pool") {
+		return rmderror.AppErrorf(http.StatusInternalServerError,
+			"Unable to read cache schemata; %s", err.Error())
+	}
+
+	avBesteffort, err := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "besteffort", cacheLevel)
+	if err != nil && !strings.Contains(err.Error(), "error doesn't support pool") {
+		return rmderror.AppErrorf(http.StatusInternalServerError,
+			"Unable to read cache schemata; %s", err.Error())
+	}
+
+	avShared, err := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "shared", cacheLevel)
+	if err != nil && !strings.Contains(err.Error(), "error doesn't support pool") {
+		return rmderror.AppErrorf(http.StatusInternalServerError,
+			"Unable to read cache schemata; %s", err.Error())
+	}
+
+	avInfra, err := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "infra", cacheLevel)
+	if err != nil && !strings.Contains(err.Error(), "error doesn't support pool") {
+		return rmderror.AppErrorf(http.StatusInternalServerError,
+			"Unable to read cache schemata; %s", err.Error())
+	}
+
+	avOs, err := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, "os", cacheLevel)
+	if err != nil && !strings.Contains(err.Error(), "error doesn't support pool") {
+		return rmderror.AppErrorf(http.StatusInternalServerError,
+			"Unable to read cache schemata; %s", err.Error())
+	}
 
 	c.Caches = make(map[uint32]Info)
 
@@ -221,11 +250,21 @@ func (c *Infos) GetByLevel(level uint32) *rmderror.AppError {
 			newCachdinfo.AvailableWays = av[sc.ID].ToString()
 
 			avp := make(map[string]string)
-			avp["guaranteed"] = avGuarantee[sc.ID].ToHumanString()
-			avp["besteffort"] = avBesteffort[sc.ID].ToHumanString()
-			avp["shared"] = avShared[sc.ID].ToHumanString()
-			avp["infra"] = avInfra[sc.ID].ToHumanString()
-			avp["os"] = avOs[sc.ID].ToHumanString()
+			if avGuarantee != nil {
+				avp["guaranteed"] = avGuarantee[sc.ID].ToHumanString()
+			}
+			if avBesteffort != nil {
+				avp["besteffort"] = avBesteffort[sc.ID].ToHumanString()
+			}
+			if avShared != nil {
+				avp["shared"] = avShared[sc.ID].ToHumanString()
+			}
+			if avInfra != nil {
+				avp["infra"] = avInfra[sc.ID].ToHumanString()
+			}
+			if avOs != nil {
+				avp["os"] = avOs[sc.ID].ToHumanString()
+			}
 			newCachdinfo.AvailableWaysPool = avp
 
 			cpuPools, _ := rdtpool.GetCPUPools()
@@ -257,7 +296,11 @@ func (c *Infos) GetByLevel(level uint32) *rmderror.AppError {
 							"Error to get min cache", err)
 					}
 
-					getAvailablePolicyCount(ap, iMax, iMin, allres, t, cacheLevel, sc.ID)
+					err = getAvailablePolicyCount(ap, iMax, iMin, allres, t, cacheLevel, sc.ID)
+					if err != nil {
+						return rmderror.AppErrorf(http.StatusInternalServerError,
+							"Unable to read cache schemata; %s", err.Error())
+					}
 
 				}
 
@@ -300,10 +343,16 @@ func getAvailablePolicyCount(ap map[string]uint32,
 	}
 
 	ap[tier] = 0
-	pav, _ := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, pool, cacheLevel)
+	pav, err := rdtpool.GetAvailableCacheSchemata(allres, []string{"infra", "."}, pool, cacheLevel)
+
+	if err != nil && !strings.Contains(err.Error(), "error doesn't support pool") {
+		return err
+	}
+
 	if len(pav) == 0 {
 		return nil
 	}
+
 	freeBitmapStrs := pav[cID].ToBinStrings()
 
 	for _, val := range freeBitmapStrs {
