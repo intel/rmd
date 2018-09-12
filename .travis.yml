@@ -52,7 +52,6 @@ env:
       allow_failures:
         - go: tip
         - env: JOB=check
-
 notifications:
       email:
           on_success: change
