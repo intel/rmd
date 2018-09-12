@@ -29,8 +29,9 @@ env:
         - JOB=docker
         - JOB=deb
         - JOB=rpm
-        allow_failures:
         - JOB=check
+        allow_failures:
+        - go: tip
 
 notifications:
       email:
