@@ -33,7 +33,7 @@ env:
 
 matrix:
     allow_failures:
-        - env: JOB=check
+        - env: JOB=check TRAVIS_GO_VERSION=tip
 
 notifications:
       email:
