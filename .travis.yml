@@ -32,6 +32,7 @@ env:
         - JOB=check
         allow_failures:
         - go: tip
+        - env: JOB=check
 
 notifications:
       email:
