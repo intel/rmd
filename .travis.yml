@@ -25,12 +25,14 @@ script:
 env:
     global:
         - GOARCH=amd64
+    matrix:
         - JOB=docker
         - JOB=deb
         - JOB=rpm
         - JOB=check
-    matrix:
-        allow_failures:
+
+matrix:
+    allow_failures:
         - go: tip
         - env: JOB=check
 
