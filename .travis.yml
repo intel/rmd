@@ -28,9 +28,27 @@ env:
     matrix:
       include:
         - go: 1.8
+        - env: JOB=docker
+        - go: 1.8
+        - env: JOB=deb
+        - go: 1.8
+        - env: JOB=rpm
+        - go: 1.8
         - env: JOB=check
         - go: 1.9
+        - env: JOB=docker
+        - go: 1.9
+        - env: JOB=deb
+        - go: 1.9
+        - env: JOB=rpm
+        - go: 1.9
         - env: JOB=check
+        - go: tip
+        - env: JOB=docker
+        - go: tip
+        - env: JOB=deb
+        - go: tip
+        - env: JOB=rpm
       allow_failures:
         - go: tip
         - env: JOB=check
