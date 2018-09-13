@@ -33,7 +33,8 @@ env:
 
 matrix:
     allow_failures:
-        - env: JOB=check
+        - go: tip
+          env: JOB=check
 
 notifications:
       email:
