@@ -3,7 +3,6 @@ package proc
 import (
 	"bufio"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/intel/rmd/lib/util"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -22,6 +22,8 @@ const (
 	MountInfoPath = "/proc/self/mountinfo"
 	// ResctrlPath is the patch to resctrl
 	ResctrlPath = "/sys/fs/resctrl"
+	// MbaInfoPath is the MBA path of
+	MbaInfoPath = "/sys/fs/resctrl/info/MB"
 )
 
 // rdt_a, cat_l3, cdp_l3, cqm, cqm_llc, cqm_occup_llc
@@ -64,6 +66,11 @@ func IsCqmAvailiable() (bool, error) {
 // IsCdpAvailiable returns CDP feature available or not
 func IsCdpAvailiable() (bool, error) {
 	return parseCPUInfoFile("cdp_l3")
+}
+
+// IsMbaAvailiable returns MBA feature available or not
+func IsMbaAvailiable() (bool, error) {
+	return parseCPUInfoFile("mba")
 }
 
 // we can use shell command: "mount -l -t resctrl"
@@ -114,6 +121,18 @@ func IsEnableCat() bool {
 		return false
 	}
 	return !strings.Contains(mount, flag) && len(mount) > 0
+}
+
+// IsEnableMba returns if MBA is enabled or not
+func IsEnableMba() bool {
+	_, err := findMountDir(ResctrlPath)
+	if err != nil {
+		return false
+	}
+	if stat, err := os.Stat(MbaInfoPath); err == nil && stat.IsDir() {
+		return true
+	}
+	return false
 }
 
 // Process struct with pid and command line
