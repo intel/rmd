@@ -53,23 +53,23 @@ func parseCPUInfoFile(flag string) (bool, error) {
 	return false, nil
 }
 
-// IsRdtAvailiable returns RDT feature available or not
-func IsRdtAvailiable() (bool, error) {
+// IsRdtAvailable returns RDT feature available or not
+func IsRdtAvailable() (bool, error) {
 	return parseCPUInfoFile("rdt_a")
 }
 
-// IsCqmAvailiable returns CMT feature available or not
-func IsCqmAvailiable() (bool, error) {
+// IsCqmAvailable returns CMT feature available or not
+func IsCqmAvailable() (bool, error) {
 	return parseCPUInfoFile("cqm")
 }
 
-// IsCdpAvailiable returns CDP feature available or not
-func IsCdpAvailiable() (bool, error) {
+// IsCdpAvailable returns CDP feature available or not
+func IsCdpAvailable() (bool, error) {
 	return parseCPUInfoFile("cdp_l3")
 }
 
-// IsMbaAvailiable returns MBA feature available or not
-func IsMbaAvailiable() (bool, error) {
+// IsMbaAvailable returns MBA feature available or not
+func IsMbaAvailable() (bool, error) {
 	return parseCPUInfoFile("mba")
 }
 

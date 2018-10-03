@@ -15,7 +15,7 @@ type MbaInfo struct {
 
 // Get returns mba status
 func (c *MbaInfo) Get() error {
-	flag, err := proc.IsMbaAvailiable()
+	flag, err := proc.IsMbaAvailable()
 	if err == nil {
 		c.Mba = flag
 		c.MbaOn = proc.IsEnableMba()
