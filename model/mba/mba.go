@@ -5,8 +5,8 @@ import (
 	"github.com/intel/rmd/lib/proc"
 )
 
-// MbaInfo is the mba information
-type MbaInfo struct {
+// Info is the mba information
+type Info struct {
 	Mba     bool `json:"mba"`
 	MbaOn   bool `json:"mba_enable,omitempty"`
 	MbaStep int  `json:"mba_step,omitempty"`
@@ -14,7 +14,7 @@ type MbaInfo struct {
 }
 
 // Get returns mba status
-func (c *MbaInfo) Get() error {
+func (c *Info) Get() error {
 	flag, err := proc.IsMbaAvailable()
 	if err == nil {
 		c.Mba = flag

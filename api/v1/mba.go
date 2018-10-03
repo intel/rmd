@@ -29,7 +29,7 @@ func (c *MbaResource) Register(container *restful.Container) {
 
 // MbaGet is handler to for GET
 func (c *MbaResource) MbaGet(request *restful.Request, response *restful.Response) {
-	m := &m_mba.MbaInfo{}
+	m := &m_mba.Info{}
 	err := m.Get()
 	if err != nil {
 		response.WriteError(http.StatusInternalServerError, err)
