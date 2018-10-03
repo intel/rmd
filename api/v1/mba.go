@@ -1,38 +1,18 @@
-// Copyright 2018 QCT (Quanta Cloud Technology). All rights reserved.
-// Use of this source code is governed by the Apache 2.0
-// license that can be found in the LICENSE file.
-
 package v1
 
 import (
+	"net/http"
+
 	"github.com/emicklei/go-restful"
-	"github.com/intel/rmd/lib/mba"
-	"github.com/intel/rmd/lib/proc"
+	m_mba "github.com/intel/rmd/model/mba"
 )
 
-// MbaInfo represents Mba API
-type MbaInfo struct {
-	Mba     bool `json:"mba"`
-	MbaOn   bool `json:"mba_enable,omitempty"`
-	MbaStep int  `json:"mba_step,omitempty"`
-	MbaMin  int  `json:"mba_min,omitempty"`
+// MbaResource represents Mba API
+type MbaResource struct {
 }
 
 // Register handlers
-func (c *MbaInfo) Register(container *restful.Container) {
-	flag, err := proc.IsMbaAvailiable()
-	if err == nil {
-		c.Mba = flag
-		c.MbaOn = proc.IsEnableMba()
-		if c.MbaOn {
-			mbaStep, mbaMin, err := mba.GetMbaInfo()
-			if err == nil {
-				c.MbaStep = mbaStep
-				c.MbaMin = mbaMin
-			}
-		}
-	}
-
+func (c *MbaResource) Register(container *restful.Container) {
 	ws := new(restful.WebService)
 	ws.
 		Path("/v1/mba").
@@ -48,6 +28,12 @@ func (c *MbaInfo) Register(container *restful.Container) {
 }
 
 // MbaGet is handler to for GET
-func (c *MbaInfo) MbaGet(request *restful.Request, response *restful.Response) {
-	response.WriteEntity(c)
+func (c *MbaResource) MbaGet(request *restful.Request, response *restful.Response) {
+	m := &m_mba.MbaInfo{}
+	err := m.Get()
+	if err != nil {
+		response.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+	response.WriteEntity(m)
 }
