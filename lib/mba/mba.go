@@ -11,7 +11,7 @@ import (
 var mbaStep, mbaMin = -1, -1
 
 // GetMbaInfo traverse resctrl MB to get info
-func GetMbaInfo() (int, int, error) {
+var GetMbaInfo = func() (int, int, error) {
 	if mbaStep == -1 || mbaMin == -1 {
 		step, min := 0, 0
 		dat, err := ioutil.ReadFile(proc.MbaInfoPath + "/bandwidth_gran")

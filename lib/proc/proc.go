@@ -69,12 +69,12 @@ func IsCdpAvailable() (bool, error) {
 }
 
 // IsMbaAvailable returns MBA feature available or not
-func IsMbaAvailable() (bool, error) {
+var IsMbaAvailable = func() (bool, error) {
 	return parseCPUInfoFile("mba")
 }
 
 // we can use shell command: "mount -l -t resctrl"
-func findMountDir(mountdir string) (string, error) {
+var findMountDir = func(mountdir string) (string, error) {
 	f, err := os.Open(MountInfoPath)
 	if err != nil {
 		return "", err
@@ -124,15 +124,18 @@ func IsEnableCat() bool {
 }
 
 // IsEnableMba returns if MBA is enabled or not
-func IsEnableMba() bool {
+var IsEnableMba = func() (bool, error) {
 	_, err := findMountDir(ResctrlPath)
 	if err != nil {
-		return false
+		return false, err
 	}
-	if stat, err := os.Stat(MbaInfoPath); err == nil && stat.IsDir() {
-		return true
+	if stat, err := os.Stat(MbaInfoPath); err == nil {
+		if stat.IsDir() {
+			return true, nil
+		}
+		return false, nil
 	}
-	return false
+	return false, err
 }
 
 // Process struct with pid and command line
