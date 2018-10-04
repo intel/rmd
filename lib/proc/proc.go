@@ -3,7 +3,6 @@ package proc
 import (
 	"bufio"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/intel/rmd/lib/util"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -22,6 +22,8 @@ const (
 	MountInfoPath = "/proc/self/mountinfo"
 	// ResctrlPath is the patch to resctrl
 	ResctrlPath = "/sys/fs/resctrl"
+	// MbaInfoPath is the MBA path of
+	MbaInfoPath = "/sys/fs/resctrl/info/MB"
 )
 
 // rdt_a, cat_l3, cdp_l3, cqm, cqm_llc, cqm_occup_llc
@@ -51,23 +53,28 @@ func parseCPUInfoFile(flag string) (bool, error) {
 	return false, nil
 }
 
-// IsRdtAvailiable returns RDT feature available or not
-func IsRdtAvailiable() (bool, error) {
+// IsRdtAvailable returns RDT feature available or not
+func IsRdtAvailable() (bool, error) {
 	return parseCPUInfoFile("rdt_a")
 }
 
-// IsCqmAvailiable returns CMT feature available or not
-func IsCqmAvailiable() (bool, error) {
+// IsCqmAvailable returns CMT feature available or not
+func IsCqmAvailable() (bool, error) {
 	return parseCPUInfoFile("cqm")
 }
 
-// IsCdpAvailiable returns CDP feature available or not
-func IsCdpAvailiable() (bool, error) {
+// IsCdpAvailable returns CDP feature available or not
+func IsCdpAvailable() (bool, error) {
 	return parseCPUInfoFile("cdp_l3")
 }
 
+// IsMbaAvailable returns MBA feature available or not
+var IsMbaAvailable = func() (bool, error) {
+	return parseCPUInfoFile("mba")
+}
+
 // we can use shell command: "mount -l -t resctrl"
-func findMountDir(mountdir string) (string, error) {
+var findMountDir = func(mountdir string) (string, error) {
 	f, err := os.Open(MountInfoPath)
 	if err != nil {
 		return "", err
@@ -114,6 +121,21 @@ func IsEnableCat() bool {
 		return false
 	}
 	return !strings.Contains(mount, flag) && len(mount) > 0
+}
+
+// IsEnableMba returns if MBA is enabled or not
+var IsEnableMba = func() (bool, error) {
+	_, err := findMountDir(ResctrlPath)
+	if err != nil {
+		return false, err
+	}
+	if stat, err := os.Stat(MbaInfoPath); err == nil {
+		if stat.IsDir() {
+			return true, nil
+		}
+		return false, nil
+	}
+	return false, err
 }
 
 // Process struct with pid and command line

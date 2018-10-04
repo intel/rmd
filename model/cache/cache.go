@@ -106,20 +106,20 @@ func (c *CachesSummary) getCaches() error {
 func (c *CachesSummary) Get() error {
 	var err error
 	var flag bool
-	flag, err = proc.IsRdtAvailiable()
+	flag, err = proc.IsRdtAvailable()
 	if err != nil {
 		return nil
 	}
 	c.Rdt = flag
 	c.Cat = flag
 
-	flag, err = proc.IsCqmAvailiable()
+	flag, err = proc.IsCqmAvailable()
 	if err != nil {
 		return nil
 	}
 	c.Cqm = flag
 
-	flag, err = proc.IsCdpAvailiable()
+	flag, err = proc.IsCdpAvailable()
 	if err != nil {
 		return nil
 	}
