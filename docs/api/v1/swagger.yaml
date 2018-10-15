@@ -20,7 +20,7 @@ paths:
      get:
       summary: Host cache information
       description: |
-        Get the cache information, include level 2, level 3 cache information if has
+        Get the cache information, include level 2, level 3 cache information it has
       tags:
         - cache
       responses:
@@ -35,7 +35,7 @@ paths:
     get:
       summary: Host cache topology for specific level
       description: |
-        Get the cache infor for specified cache level, also the endpoint suppport provide llc
+        Get the cache information for specified cache level, also the endpoint suppport provide llc
       tags:
         - cache
       parameters:
@@ -47,7 +47,7 @@ paths:
         enum: ['l3', 'l2', 'llc']
       responses:
         200:
-          description: An array cache infor
+          description: An array cache information
           schema:
             type: array
             items:
@@ -176,7 +176,7 @@ paths:
     get:
       summary: List pre-defined cache policy
       description: |
-        List pre-defined cache polies
+        List pre-defined cache policies
       tags:
         - policy
       responses:
@@ -206,10 +206,10 @@ definitions:
         description: rdt supported
       cqm:
         type: boolean
-        description: cache mointoring suppported
+        description: cache quality monitoring supported
       cdp:
         type: boolean
-        description: cache mointoring suppported
+        description: code data prioritization supported
       caches:
         $ref: '#/definitions/CacheSummary'
   CacheInfo:
@@ -223,14 +223,14 @@ definitions:
         description: total size of the cache
       cdp:
         type: boolean
-        description: cache mointoring suppported
+        description: code data prioritization supported
   CacheInfos:
     type: object
     properties:
       number:
         type: integer
         format: int32
-        description: number of cache infor
+        description: number of cache information
       Caches:
         $ref: '#/definitions/CacheInfo'
   Workload:
