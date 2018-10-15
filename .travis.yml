@@ -14,7 +14,7 @@ go:
     - tip
 
 before_install:
-    - if [ "${JOB}" = "check" ]; then go get -v github.com/golang/lint/golint; fi
+    - if [ "${JOB}" = "check" ]; then go get -v golang.org/x/lint/golint; fi
 
 script:
     - 'if [ "${JOB}" = "docker" ]; then make docker; fi'
