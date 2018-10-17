@@ -4,28 +4,27 @@ package workload
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 
+	rmderror "github.com/intel/rmd/api/error"
+	"github.com/intel/rmd/db"
 	syscache "github.com/intel/rmd/lib/cache"
 	"github.com/intel/rmd/lib/cpu"
 	"github.com/intel/rmd/lib/proc"
 	"github.com/intel/rmd/lib/proxyclient"
 	"github.com/intel/rmd/lib/resctrl"
 	libutil "github.com/intel/rmd/lib/util"
-
-	rmderror "github.com/intel/rmd/api/error"
-	"github.com/intel/rmd/db"
 	"github.com/intel/rmd/model/cache"
 	"github.com/intel/rmd/model/policy"
 	tw "github.com/intel/rmd/model/types/workload"
 	"github.com/intel/rmd/util"
 	"github.com/intel/rmd/util/rdtpool"
 	rmdbase "github.com/intel/rmd/util/rdtpool/base"
+	log "github.com/sirupsen/logrus"
 )
 
 var l sync.Mutex
@@ -34,6 +33,19 @@ var l sync.Mutex
 func Validate(w *tw.RDTWorkLoad) error {
 	if len(w.TaskIDs) <= 0 && len(w.CoreIDs) <= 0 {
 		return fmt.Errorf("No task or core id specified")
+	}
+
+	// Check if user set MbaMbps
+	if w.MbaMbps != nil {
+		return fmt.Errorf("MBA Mbps didn't implemented yet")
+	}
+
+	// workloads API only accepts mba configuration for guaranteed pool
+	if w.MbaPercentage != nil || w.MbaMbps != nil {
+		if (*w.MaxCache == 0 && *w.MinCache == 0) ||
+			(*w.MaxCache > 0 && *w.MinCache > 0 && *w.MaxCache > *w.MinCache) {
+			return fmt.Errorf("Setting MBA on shared pool is forbidden")
+		}
 	}
 
 	// Firstly verify the task.
@@ -76,6 +88,7 @@ func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
 	reserved := rdtpool.GetReservedInfo()
 	changedRes := make(map[string]*resctrl.ResAssociation, 0)
 	candidate := make(map[string]*libutil.Bitmap, 0)
+	mbaTarget := make(map[int]bool)
 
 	for k, v := range av {
 		cacheID, _ := strconv.Atoi(k)
@@ -85,6 +98,7 @@ func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
 				rmdbase.GetCosInfo().CbmMask)
 			continue
 		}
+		mbaTarget[cacheID] = true
 		switch er.Type {
 		case rdtpool.Guarantee:
 			// TODO
@@ -172,6 +186,14 @@ func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
 		}
 	}
 	resAss.Tasks = append(resAss.Tasks, w.TaskIDs...)
+	if w.MbaPercentage != nil {
+		mbaStr := strconv.FormatUint((uint64)(*w.MbaPercentage), 10)
+		for k := range resAss.Schemata["MB"] {
+			if _, ok := mbaTarget[(int)(resAss.Schemata["MB"][k].ID)]; ok {
+				resAss.Schemata["MB"][k].Mask = mbaStr
+			}
+		}
+	}
 
 	if err = proxyclient.Commit(resAss, grpName); err != nil {
 		log.Errorf("Error while try to commit resource group for workload %s, group name %s", w.ID, grpName)
@@ -460,6 +482,10 @@ func newResAss(r map[string]*libutil.Bitmap, level string) *resctrl.ResAssociati
 		cacheID, _ := strconv.Atoi(k)
 		newcos := resctrl.CacheCos{ID: uint8(cacheID), Mask: v.ToString()}
 		newResAss.Schemata[targetLev] = append(newResAss.Schemata[targetLev], newcos)
+
+		// Add MB settings, default is 100
+		newcos = resctrl.CacheCos{ID: uint8(cacheID), Mask: "100"}
+		newResAss.Schemata["MB"] = append(newResAss.Schemata["MB"], newcos)
 
 		log.Debugf("Newly created Mask for Cache %s is %s", k, newcos.Mask)
 	}

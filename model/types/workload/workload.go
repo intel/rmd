@@ -31,6 +31,9 @@ type RDTWorkLoad struct {
 	MaxCache *uint32 `json:"max_cache,omitempty"`
 	// Min Cache ways, use pointer to distinguish 0 value and empty value
 	MinCache *uint32 `json:"min_cache,omitempty"`
+	// Mba-realted value
+	MbaPercentage *uint32 `json:"mba_percentage,omitempty"`
+	MbaMbps       *uint32 `json:"mba_mbps,omitempty"`
 }
 
 // EnforceRequest build this struct when create Resasscciation

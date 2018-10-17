@@ -3,12 +3,11 @@ package workload
 import (
 	"testing"
 
-	. "github.com/prashantv/gostub"
-	. "github.com/smartystreets/goconvey/convey"
 	"github.com/intel/rmd/lib/proc"
 	"github.com/intel/rmd/model/cache"
-
 	tw "github.com/intel/rmd/model/types/workload"
+	. "github.com/prashantv/gostub"
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 func TestGetCacheIDs(t *testing.T) {
@@ -67,6 +66,39 @@ func TestValidateWorkLoad(t *testing.T) {
 				})
 			})
 
+			Convey("Validate with mba mbps", func() {
+				wl.MbaMbps = &cache
+				err := Validate(wl)
+				So(err, ShouldNotBeNil)
+			})
+
+			Convey("Validate mba with different cachepools", func() {
+				var sharedCache uint32 = 0
+				wl.MbaPercentage = &cache
+				wl.MinCache = &sharedCache
+
+				Convey("Validate mba with shared pools", func() {
+					wl.MaxCache = &sharedCache
+					err := Validate(wl)
+					So(err, ShouldNotBeNil)
+				})
+
+				Convey("Validate mba with besteffort pools", func() {
+					sharedCache = 2
+					wl.MaxCache = &sharedCache
+					wl.MinCache = &cache
+					err := Validate(wl)
+					So(err, ShouldNotBeNil)
+				})
+
+				Convey("Validate mba with guaranteed pools", func() {
+					wl.MaxCache = &cache
+					wl.MinCache = &cache
+					err := Validate(wl)
+					So(err, ShouldBeNil)
+				})
+			})
+
 			wl.MaxCache = &cache
 			Convey("Validate with MaxCache is not nil but MinCache is nil", func() {
 				err := Validate(wl)
@@ -74,7 +106,6 @@ func TestValidateWorkLoad(t *testing.T) {
 
 				wl.MinCache = &cache
 				Convey("Validate with MaxCache & MinCache are not nil", func() {
-
 					err := Validate(wl)
 					So(err, ShouldBeNil)
 				})
