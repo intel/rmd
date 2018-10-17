@@ -111,6 +111,7 @@ func Initialize(c *Config) (*restful.Container, error) {
 	hospitality := v1.HospitalityResource{}
 	wls := v1.WorkLoadResource{Db: db}
 	mba := v1.MbaResource{}
+	cachepool := v1.CachePoolResource{}
 
 	// Register controller to container
 	caches.Register(wsContainer)
@@ -118,6 +119,7 @@ func Initialize(c *Config) (*restful.Container, error) {
 	hospitality.Register(wsContainer)
 	wls.Register(wsContainer)
 	mba.Register(wsContainer)
+	cachepool.Register(wsContainer)
 
 	// Install adds the SgaggerUI webservices
 	c.Swagger.WebServices = wsContainer.RegisteredWebServices()
