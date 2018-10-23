@@ -5,6 +5,7 @@ import (
 
 	"github.com/intel/rmd/lib/proc"
 	"github.com/intel/rmd/model/cache"
+	m_mba "github.com/intel/rmd/model/mba"
 	tw "github.com/intel/rmd/model/types/workload"
 	. "github.com/prashantv/gostub"
 	. "github.com/smartystreets/goconvey/convey"
@@ -50,36 +51,38 @@ func TestValidateWorkLoad(t *testing.T) {
 			subs := StubFunc(&proc.ListProcesses, map[string]proc.Process{"1": proc.Process{1, "cmdline"}})
 			defer subs.Reset()
 			var cache uint32 = 1
+			mbaInfo := &m_mba.Info{true, true, 10, 10}
 			wl := &tw.RDTWorkLoad{}
-			err := Validate(wl)
+			err := Validate(wl, mbaInfo)
 			So(err, ShouldNotBeNil)
 
 			wl.TaskIDs = []string{"1"}
 			Convey("Validate with task ids", func() {
-				err := Validate(wl)
+				err := Validate(wl, mbaInfo)
 				So(err, ShouldNotBeNil)
 
 				wl.Policy = "gold"
 				Convey("Validate with task ids and Policy", func() {
-					err := Validate(wl)
+					err := Validate(wl, mbaInfo)
 					So(err, ShouldBeNil)
 				})
 			})
 
 			Convey("Validate with mba mbps", func() {
 				wl.MbaMbps = &cache
-				err := Validate(wl)
+				err := Validate(wl, mbaInfo)
 				So(err, ShouldNotBeNil)
 			})
 
 			Convey("Validate mba with different cachepools", func() {
 				var sharedCache uint32 = 0
-				wl.MbaPercentage = &cache
+				mbap := (uint32)(50)
+				wl.MbaPercentage = &mbap
 				wl.MinCache = &sharedCache
 
 				Convey("Validate mba with shared pools", func() {
 					wl.MaxCache = &sharedCache
-					err := Validate(wl)
+					err := Validate(wl, mbaInfo)
 					So(err, ShouldNotBeNil)
 				})
 
@@ -87,33 +90,51 @@ func TestValidateWorkLoad(t *testing.T) {
 					sharedCache = 2
 					wl.MaxCache = &sharedCache
 					wl.MinCache = &cache
-					err := Validate(wl)
+					err := Validate(wl, mbaInfo)
 					So(err, ShouldNotBeNil)
 				})
 
 				Convey("Validate mba with guaranteed pools", func() {
 					wl.MaxCache = &cache
 					wl.MinCache = &cache
-					err := Validate(wl)
+					err := Validate(wl, mbaInfo)
 					So(err, ShouldBeNil)
+
+					Convey("Validate MBA percentage with MbaStep", func() {
+						mbap = (uint32)(55)
+						err := Validate(wl, mbaInfo)
+						So(err, ShouldNotBeNil)
+					})
+
+					Convey("Validate MBA percentage > 100", func() {
+						mbap = (uint32)(110)
+						err := Validate(wl, mbaInfo)
+						So(err, ShouldNotBeNil)
+					})
+
+					Convey("Validate MBA percentage < MbaMin", func() {
+						mbap = (uint32)(0)
+						err := Validate(wl, mbaInfo)
+						So(err, ShouldNotBeNil)
+					})
 				})
 			})
 
 			wl.MaxCache = &cache
 			Convey("Validate with MaxCache is not nil but MinCache is nil", func() {
-				err := Validate(wl)
+				err := Validate(wl, mbaInfo)
 				So(err, ShouldNotBeNil)
 
 				wl.MinCache = &cache
 				Convey("Validate with MaxCache & MinCache are not nil", func() {
-					err := Validate(wl)
+					err := Validate(wl, mbaInfo)
 					So(err, ShouldBeNil)
 				})
 			})
 
 			wl.TaskIDs = []string{"2"}
 			Convey("Validate with task ids does not existed", func() {
-				err := Validate(wl)
+				err := Validate(wl, mbaInfo)
 				So(err, ShouldNotBeNil)
 			})
 		})

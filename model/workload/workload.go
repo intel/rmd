@@ -19,6 +19,7 @@ import (
 	"github.com/intel/rmd/lib/resctrl"
 	libutil "github.com/intel/rmd/lib/util"
 	"github.com/intel/rmd/model/cache"
+	m_mba "github.com/intel/rmd/model/mba"
 	"github.com/intel/rmd/model/policy"
 	tw "github.com/intel/rmd/model/types/workload"
 	"github.com/intel/rmd/util"
@@ -29,8 +30,13 @@ import (
 
 var l sync.Mutex
 
+type mixedCandidate struct {
+	bitmap *libutil.Bitmap
+	mba    *string
+}
+
 // Validate the request workload object is validated.
-func Validate(w *tw.RDTWorkLoad) error {
+func Validate(w *tw.RDTWorkLoad, mbaInfo *m_mba.Info) error {
 	if len(w.TaskIDs) <= 0 && len(w.CoreIDs) <= 0 {
 		return fmt.Errorf("No task or core id specified")
 	}
@@ -45,6 +51,16 @@ func Validate(w *tw.RDTWorkLoad) error {
 		if (*w.MaxCache == 0 && *w.MinCache == 0) ||
 			(*w.MaxCache > 0 && *w.MinCache > 0 && *w.MaxCache > *w.MinCache) {
 			return fmt.Errorf("Setting MBA on shared pool is forbidden")
+		}
+	}
+
+	if w.MbaPercentage != nil {
+		if mbaInfo.MbaOn == false {
+			return fmt.Errorf("This platform does not support MBA")
+		}
+		if *w.MbaPercentage > 100 || (int)(*w.MbaPercentage) < mbaInfo.MbaMin ||
+			(int)(*w.MbaPercentage)%mbaInfo.MbaStep != 0 {
+			return fmt.Errorf("MBA settings are not in the range")
 		}
 	}
 
@@ -66,7 +82,7 @@ func Validate(w *tw.RDTWorkLoad) error {
 }
 
 // Enforce a user request workload based on defined policy
-func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
+func Enforce(w *tw.RDTWorkLoad, mbaInfo *m_mba.Info) *rmderror.AppError {
 	w.Status = tw.Failed
 
 	l.Lock()
@@ -88,7 +104,7 @@ func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
 	reserved := rdtpool.GetReservedInfo()
 	changedRes := make(map[string]*resctrl.ResAssociation, 0)
 	candidate := make(map[string]*libutil.Bitmap, 0)
-	mbaTarget := make(map[int]bool)
+	mbaTarget := make(map[string]bool)
 
 	for k, v := range av {
 		cacheID, _ := strconv.Atoi(k)
@@ -98,7 +114,7 @@ func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
 				rmdbase.GetCosInfo().CbmMask)
 			continue
 		}
-		mbaTarget[cacheID] = true
+		mbaTarget[k] = true
 		switch er.Type {
 		case rdtpool.Guarantee:
 			// TODO
@@ -159,15 +175,37 @@ func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
 	var resAss *resctrl.ResAssociation
 	var grpName string
 
+	newCandidate := make(map[string]mixedCandidate)
+
+	if mbaInfo.MbaOn {
+		maxMba := "100"
+		mbaStr := "100"
+		if er.Type == rdtpool.Guarantee && w.MbaPercentage != nil {
+			mbaStr = strconv.FormatUint((uint64)(*w.MbaPercentage), 10)
+		}
+		for k, v := range candidate {
+			if ok := mbaTarget[k]; ok {
+				newCandidate[k] = mixedCandidate{v, &mbaStr}
+			} else {
+				newCandidate[k] = mixedCandidate{v, &maxMba}
+			}
+		}
+		fmt.Println(newCandidate["0"], newCandidate["1"], newCandidate)
+	} else {
+		for k, v := range candidate {
+			newCandidate[k] = mixedCandidate{v, nil}
+		}
+	}
+
 	if er.Type == rdtpool.Shared {
 		grpName = reserved[rdtpool.Shared].Name
 		if res, ok := resaall[grpName]; !ok {
-			resAss = newResAss(candidate, targetLev)
+			resAss = newResAss(newCandidate, targetLev)
 		} else {
 			resAss = res
 		}
 	} else {
-		resAss = newResAss(candidate, targetLev)
+		resAss = newResAss(newCandidate, targetLev)
 		if len(w.TaskIDs) > 0 {
 			grpName = w.TaskIDs[0] + "-" + er.Type
 		} else if len(w.CoreIDs) > 0 {
@@ -186,14 +224,6 @@ func Enforce(w *tw.RDTWorkLoad) *rmderror.AppError {
 		}
 	}
 	resAss.Tasks = append(resAss.Tasks, w.TaskIDs...)
-	if w.MbaPercentage != nil {
-		mbaStr := strconv.FormatUint((uint64)(*w.MbaPercentage), 10)
-		for k := range resAss.Schemata["MB"] {
-			if _, ok := mbaTarget[(int)(resAss.Schemata["MB"][k].ID)]; ok {
-				resAss.Schemata["MB"][k].Mask = mbaStr
-			}
-		}
-	}
 
 	if err = proxyclient.Commit(resAss, grpName); err != nil {
 		log.Errorf("Error while try to commit resource group for workload %s, group name %s", w.ID, grpName)
@@ -306,6 +336,12 @@ func Update(w, patched *tw.RDTWorkLoad) *rmderror.AppError {
 		reEnforce = true
 	}
 
+	m := &m_mba.Info{}
+	err := m.Get()
+	if err != nil {
+		return rmderror.AppErrorf(http.StatusInternalServerError,
+			"Get MBA Info error; %s", err.Error())
+	}
 	if reEnforce == true {
 		if err := Release(w); err != nil {
 			return rmderror.NewAppError(http.StatusInternalServerError, "Faild to release workload",
@@ -318,7 +354,7 @@ func Update(w, patched *tw.RDTWorkLoad) *rmderror.AppError {
 		if len(patched.CoreIDs) > 0 {
 			w.CoreIDs = patched.CoreIDs
 		}
-		return Enforce(w)
+		return Enforce(w, m)
 	}
 
 	l.Lock()
@@ -327,7 +363,7 @@ func Update(w, patched *tw.RDTWorkLoad) *rmderror.AppError {
 
 	if !reflect.DeepEqual(patched.CoreIDs, w.CoreIDs) ||
 		!reflect.DeepEqual(patched.TaskIDs, w.TaskIDs) {
-		err := Validate(patched)
+		err = Validate(patched, m)
 		if err != nil {
 			return rmderror.NewAppError(http.StatusBadRequest, "Failed to validate workload", err)
 		}
@@ -439,6 +475,9 @@ func populateEnforceRequest(req *tw.EnforceRequest, w *tw.RDTWorkLoad) *rmderror
 		req.MaxWays = *w.MaxCache
 		populatePolicy = false
 	}
+	if w.MbaPercentage != nil {
+		populatePolicy = false
+	}
 	// else get max/min from policy
 	if populatePolicy {
 		p, err := policy.GetDefaultPolicy(w.Policy)
@@ -472,7 +511,7 @@ func populateEnforceRequest(req *tw.EnforceRequest, w *tw.RDTWorkLoad) *rmderror
 	return nil
 }
 
-func newResAss(r map[string]*libutil.Bitmap, level string) *resctrl.ResAssociation {
+func newResAss(r map[string]mixedCandidate, level string) *resctrl.ResAssociation {
 	newResAss := resctrl.ResAssociation{}
 	newResAss.Schemata = make(map[string][]resctrl.CacheCos)
 
@@ -480,12 +519,14 @@ func newResAss(r map[string]*libutil.Bitmap, level string) *resctrl.ResAssociati
 
 	for k, v := range r {
 		cacheID, _ := strconv.Atoi(k)
-		newcos := resctrl.CacheCos{ID: uint8(cacheID), Mask: v.ToString()}
+		newcos := resctrl.CacheCos{ID: uint8(cacheID), Mask: v.bitmap.ToString()}
 		newResAss.Schemata[targetLev] = append(newResAss.Schemata[targetLev], newcos)
 
-		// Add MB settings, default is 100
-		newcos = resctrl.CacheCos{ID: uint8(cacheID), Mask: "100"}
-		newResAss.Schemata["MB"] = append(newResAss.Schemata["MB"], newcos)
+		// Add MB settings
+		if v.mba != nil {
+			newcos = resctrl.CacheCos{ID: uint8(cacheID), Mask: *v.mba}
+			newResAss.Schemata["MB"] = append(newResAss.Schemata["MB"], newcos)
+		}
 
 		log.Debugf("Newly created Mask for Cache %s is %s", k, newcos.Mask)
 	}
