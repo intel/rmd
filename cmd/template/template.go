@@ -54,11 +54,13 @@ debugport = {{.debugport}}
 [OSGroup] # OSGroup is mandatory
 cacheways = {{.os_cacheways}}
 cpuset = "0-1"
+{{if .mba_percentage_osgroup}}MbaPercentage = {{.mba_percentage_osgroup}}{{end}}
 
 [InfraGroup] # InfraGroup is optional
 cacheways = {{.infra_cacheways}}
 cpuset = "2-3"
 tasks = ["ovs*"] # Just support Wildcards. Do we need to support RE?
+{{if .mba_percentage_infragroup}}MbaPercentage = {{.mba_percentage_infragroup}}{{end}}
 
 [CachePool] # Cache Pool config is optional
 shrink = {{.shrink}}
@@ -66,6 +68,7 @@ max_allowed_shared = {{.max_shared}} # max allowed workload in shared pool, defa
 guarantee = {{.guarantee}}
 besteffort = {{.besteffort}}
 shared = {{.shared}}
+{{if .mba_percentage_shared_pool}}MbaPercentageShared = {{.mba_percentage_shared_pool}}{{end}}
 
 [acl]
 path = "/usr/local/etc/rmd/acl/"  #

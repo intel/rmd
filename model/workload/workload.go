@@ -26,6 +26,7 @@ import (
 	"github.com/intel/rmd/util"
 	"github.com/intel/rmd/util/rdtpool"
 	rmdbase "github.com/intel/rmd/util/rdtpool/base"
+	"github.com/intel/rmd/util/rdtpool/config"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -171,6 +172,7 @@ func Enforce(w *tw.RDTWorkLoad, mbaInfo *m_mba.Info) *rmderror.AppError {
 	}
 
 	reserved := rdtpool.GetReservedInfo()
+	poolConf := config.NewCachePoolConfig()
 	changedRes := make(map[string]*resctrl.ResAssociation, 0)
 	candidate := make(map[string]*libutil.Bitmap, 0)
 	mbaTarget := make(map[string]bool)
@@ -245,6 +247,9 @@ func Enforce(w *tw.RDTWorkLoad, mbaInfo *m_mba.Info) *rmderror.AppError {
 		mbaStr := "100"
 		if er.Type == rdtpool.Guarantee && w.MbaPercentage != nil {
 			mbaStr = strconv.FormatUint((uint64)(*w.MbaPercentage), 10)
+		}
+		if er.Type == rdtpool.Shared && poolConf.MbaPercentageShared != -1 {
+			mbaStr = strconv.FormatInt((int64)(poolConf.MbaPercentageShared), 10)
 		}
 		for k, v := range candidate {
 			if ok := mbaTarget[k]; ok {

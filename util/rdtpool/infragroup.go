@@ -2,19 +2,20 @@ package rdtpool
 
 import (
 	"fmt"
-	"github.com/gobwas/glob"
-	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/gobwas/glob"
 	syscache "github.com/intel/rmd/lib/cache"
 	"github.com/intel/rmd/lib/proc"
 	"github.com/intel/rmd/lib/proxyclient"
 	"github.com/intel/rmd/lib/resctrl"
 	util "github.com/intel/rmd/lib/util"
+	m_mba "github.com/intel/rmd/model/mba"
 	"github.com/intel/rmd/util/rdtpool/base"
 	"github.com/intel/rmd/util/rdtpool/config"
+	log "github.com/sirupsen/logrus"
 )
 
 var groupName = "infra"
@@ -110,6 +111,11 @@ func SetInfraGroup() error {
 	if err != nil {
 		return err
 	}
+	m := &m_mba.Info{}
+	err = m.Get()
+	if err != nil {
+		return err
+	}
 
 	level := syscache.GetLLC()
 	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
@@ -121,22 +127,38 @@ func SetInfraGroup() error {
 		infraGroup = resctrl.NewResAssociation()
 		l := len(reserve.Schemata)
 		infraGroup.Schemata[cacheLevel] = make([]resctrl.CacheCos, l, l)
+		if m.MbaOn {
+			infraGroup.Schemata["MB"] = make([]resctrl.CacheCos, l, l)
+		}
 	}
 	infraGroup.CPUs = reserve.AllCPUs.ToString()
 
 	for k, v := range reserve.Schemata {
 		id, _ := strconv.Atoi(k)
 		var mask string
+		var mbamask string
 		if !reserve.CPUsPerNode[k].IsEmpty() {
 			mask = v.ToString()
+			if conf.MbaPercentage != -1 {
+				mbamask = strconv.FormatInt(int64(conf.MbaPercentage), 10)
+			} else {
+				mbamask = "100"
+			}
 		} else {
 			mask = strconv.FormatUint(1<<uint(ways)-1, 16)
+			mbamask = "100"
 		}
 		cc := resctrl.CacheCos{
 			ID:   uint8(id),
 			Mask: mask,
 		}
 		infraGroup.Schemata[cacheLevel][id] = cc
+		if m.MbaOn {
+			infraGroup.Schemata["MB"][id] = resctrl.CacheCos{
+				ID:   uint8(id),
+				Mask: mbamask,
+			}
+		}
 	}
 
 	gt := getGlobTasks()
