@@ -48,7 +48,7 @@ func Validate(w *tw.RDTWorkLoad, mbaInfo *m_mba.Info) error {
 	}
 
 	// workloads API only accepts mba configuration for guaranteed pool
-	if w.MbaPercentage != nil || w.MbaMbps != nil {
+	if w.MbaPercentage != nil {
 		if mbaInfo.MbaOn == false {
 			return fmt.Errorf("This platform does not support MBA")
 		}
@@ -61,8 +61,7 @@ func Validate(w *tw.RDTWorkLoad, mbaInfo *m_mba.Info) error {
 	}
 
 	if w.MbaPercentage != nil {
-		if *w.MbaPercentage > 100 || (int)(*w.MbaPercentage) < mbaInfo.MbaMin ||
-			(int)(*w.MbaPercentage)%mbaInfo.MbaStep != 0 {
+		if *w.MbaPercentage > 100 || (int)(*w.MbaPercentage) < mbaInfo.MbaMin {
 			return fmt.Errorf("MBA settings are not in the range")
 		}
 	}
@@ -75,7 +74,7 @@ func Validate(w *tw.RDTWorkLoad, mbaInfo *m_mba.Info) error {
 		}
 	}
 
-	if w.MbaPercentage == nil && w.MbaMbps == nil && w.Policy == "" {
+	if w.MbaPercentage == nil && w.Policy == "" {
 		if w.MaxCache == nil || w.MinCache == nil {
 			return fmt.Errorf("Need to provide max_cache and min_cache if no policy specified")
 		}
@@ -109,8 +108,7 @@ func Enforce(w *tw.RDTWorkLoad, mbaInfo *m_mba.Info) *rmderror.AppError {
 	l.Lock()
 	defer l.Unlock()
 
-	if w.MaxCache == nil && w.MinCache == nil && w.Policy == "" &&
-		(w.MbaPercentage != nil || w.MbaMbps != nil) {
+	if w.MaxCache == nil && w.MinCache == nil && w.Policy == "" && w.MbaPercentage != nil {
 		mbaStr := strconv.FormatUint((uint64)(*w.MbaPercentage), 10)
 		cellNum, err := l_mba.GetCellNumber()
 		if err != nil {
@@ -122,7 +120,6 @@ func Enforce(w *tw.RDTWorkLoad, mbaInfo *m_mba.Info) *rmderror.AppError {
 			grpName = w.TaskIDs[0] + "-MBA-Task"
 			for i := 0; i < cellNum; i++ {
 				cellID := strconv.FormatInt((int64)(i), 10)
-				fmt.Println(i, cellID)
 				newCandidate[cellID] = mixedCandidate{nil, &mbaStr}
 			}
 		} else if len(w.CoreIDs) > 0 {
@@ -256,7 +253,6 @@ func Enforce(w *tw.RDTWorkLoad, mbaInfo *m_mba.Info) *rmderror.AppError {
 				newCandidate[k] = mixedCandidate{v, &maxMba}
 			}
 		}
-		fmt.Println(newCandidate["0"], newCandidate["1"], newCandidate)
 	} else {
 		for k, v := range candidate {
 			newCandidate[k] = mixedCandidate{v, nil}

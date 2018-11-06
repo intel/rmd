@@ -100,12 +100,6 @@ func TestValidateWorkLoad(t *testing.T) {
 					err := Validate(wl, mbaInfo)
 					So(err, ShouldBeNil)
 
-					Convey("Validate MBA percentage with MbaStep", func() {
-						mbap = (uint32)(55)
-						err := Validate(wl, mbaInfo)
-						So(err, ShouldNotBeNil)
-					})
-
 					Convey("Validate MBA percentage > 100", func() {
 						mbap = (uint32)(110)
 						err := Validate(wl, mbaInfo)
