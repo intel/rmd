@@ -287,7 +287,7 @@ func GetRdtCosInfo() map[string]*RdtCosInfo {
 	if RdtInfo != nil {
 		return *RdtInfo
 	}
-	ignore := []string{"info"} // ignore the toppath
+	ignore := []string{"info", "bit_usage", "shareable_bits"} // ignore the toppath
 	info := make(map[string]*RdtCosInfo)
 	basepath := SysResctrl + "/info"
 	filepath.Walk(basepath, parserRdtCosInfo(basepath, ignore, info))
