@@ -226,7 +226,7 @@ hospitality score.
 
 The score will be calculate as following:
 
-| request | hospitality score | cahce pool |
+| request | hospitality score | cache pool |
 | :-----: | :---------------: | :--------: |
 | max_cache == min_cache > 0 | `[0 \| 100]` | Guarantee |
 | max_cache == min_cache == 0 | `[0 \| 100]` | Shared |
