@@ -5,6 +5,7 @@ import (
 
 	"github.com/emicklei/go-restful"
 	"github.com/intel/rmd/db"
+	m_mba "github.com/intel/rmd/model/mba"
 	tw "github.com/intel/rmd/model/types/workload"
 	"github.com/intel/rmd/model/workload"
 	log "github.com/sirupsen/logrus"
@@ -90,7 +91,14 @@ func (w *WorkLoadResource) WorkLoadNew(request *restful.Request, response *restf
 		return
 	}
 
-	if err := workload.Validate(wl); err != nil {
+	m := &m_mba.Info{}
+	err = m.Get()
+	if err != nil {
+		response.WriteError(http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := workload.Validate(wl, m); err != nil {
 		response.WriteErrorString(http.StatusBadRequest,
 			"Failed to validate workload. Reason: "+err.Error())
 		return
@@ -103,7 +111,7 @@ func (w *WorkLoadResource) WorkLoadNew(request *restful.Request, response *restf
 		return
 	}
 
-	e := workload.Enforce(wl)
+	e := workload.Enforce(wl, m)
 	if e != nil {
 		response.WriteErrorString(e.Code, e.Error())
 		// Some thing wrong in user's request parameters. Delete the DB.

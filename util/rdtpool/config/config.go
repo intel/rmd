@@ -8,35 +8,38 @@ import (
 
 // OSGroup represents os group configuration
 type OSGroup struct {
-	CacheWays uint   `toml:"cacheways"`
-	CPUSet    string `toml:"cpuset"`
+	CacheWays     uint   `toml:"cacheways"`
+	CPUSet        string `toml:"cpuset"`
+	MbaPercentage int
 }
 
 // InfraGroup represents infra group configuration
 type InfraGroup struct {
-	CacheWays uint     `toml:"cacheways"`
-	CPUSet    string   `toml:"cpuset"`
-	Tasks     []string `toml:"tasks"`
+	CacheWays     uint     `toml:"cacheways"`
+	CPUSet        string   `toml:"cpuset"`
+	Tasks         []string `toml:"tasks"`
+	MbaPercentage int
 }
 
 // CachePool represents cache pool layout configuration
 type CachePool struct {
-	MaxAllowedShared uint `toml:"max_allowed_shared"`
-	Guarantee        uint `toml:"guarantee"`
-	Besteffort       uint `toml:"besteffort"`
-	Shared           uint `toml:"shared"`
-	Shrink           bool `toml:"shrink"`
+	MaxAllowedShared    uint `toml:"max_allowed_shared"`
+	Guarantee           uint `toml:"guarantee"`
+	Besteffort          uint `toml:"besteffort"`
+	Shared              uint `toml:"shared"`
+	Shrink              bool `toml:"shrink"`
+	MbaPercentageShared int
 }
 
 var infraConfigOnce sync.Once
 var osConfigOnce sync.Once
 var cachePoolConfigOnce sync.Once
 
-var infragroup = &InfraGroup{}
-var osgroup = &OSGroup{1, "0"}
+var infragroup = &InfraGroup{1, "0", nil, -1}
+var osgroup = &OSGroup{1, "0", -1}
 
 // FIXME: the default may not work on some platform
-var cachepool = &CachePool{10, 10, 7, 2, false}
+var cachepool = &CachePool{10, 10, 7, 2, false, -1}
 
 // NewInfraConfig reads InfraGroup configuration
 func NewInfraConfig() *InfraGroup {

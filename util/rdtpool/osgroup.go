@@ -8,6 +8,7 @@ import (
 	syscache "github.com/intel/rmd/lib/cache"
 	"github.com/intel/rmd/lib/proxyclient"
 	"github.com/intel/rmd/lib/util"
+	m_mba "github.com/intel/rmd/model/mba"
 	"github.com/intel/rmd/util/rdtpool/base"
 	"github.com/intel/rmd/util/rdtpool/config"
 )
@@ -94,13 +95,18 @@ func SetOSGroup() error {
 	if err != nil {
 		return err
 	}
+	m := &m_mba.Info{}
+	err = m.Get()
+	if err != nil {
+		return err
+	}
 
+	conf := config.NewOSConfig()
 	for i, v := range osGroup.Schemata[cacheLevel] {
 		cacheID := strconv.Itoa(int(v.ID))
 		if !reserve.CPUsPerNode[cacheID].IsEmpty() {
 			// OSGroup is the first Group, use the edge cache ways.
 			// FIXME , left or right cache ways, need to be check.
-			conf := config.NewOSConfig()
 			request, _ := base.CacheBitmaps(strconv.FormatUint(1<<conf.CacheWays-1, 16))
 			// NOTE , simpleness, brutal. Reset Cache for OS Group,
 			// even the cache is occupied by other group.
@@ -110,6 +116,13 @@ func SetOSGroup() error {
 			osGroup.Schemata[cacheLevel][i].Mask = strconv.FormatUint(1<<uint(len(expectWays))-1, 16)
 		} else {
 			osGroup.Schemata[cacheLevel][i].Mask = base.GetCosInfo().CbmMask
+		}
+		if m.MbaOn {
+			if conf.MbaPercentage != -1 {
+				osGroup.Schemata["MB"][i].Mask = strconv.FormatInt(int64(conf.MbaPercentage), 10)
+			} else {
+				osGroup.Schemata["MB"][i].Mask = "100"
+			}
 		}
 	}
 	return proxyclient.Commit(osGroup, ".")
