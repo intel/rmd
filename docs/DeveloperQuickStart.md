@@ -15,6 +15,8 @@ export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 go env
 ```
 
+As RMD is prepared as "Go module", it needs at least Go 1.11 version to be build properly. However, it is highly recommended to use version not lower than 1.13 due to multiple bugs fixed in the standard library.
+
 ## Get rmd
 
 ```
@@ -44,8 +46,8 @@ $ sudo /usr/local/sbin/rmd
 
 ## Commit code
 
-Bash shell script `hacking.sh` checks coding style using `go fmt` and `golint`.
-Before you commit your changes, run `hacking.sh` in scripts directory,
+Bash shell script `hacking_v2.sh` checks coding style using `go fmt` and `golint`.
+Before you commit your changes, run `hacking_v2.sh` in scripts directory,
 and address errors before you push your changes.
 
 Alternatively, you can run `make check` to do a full static code checking.

@@ -19,7 +19,7 @@ Belows are the configuration files for RMD:
 
 * rmd.toml : main configuration file
 * cpu_map.toml : CPU microarchitecture for RMD to discover hardware platform
-* policy.yaml : pre-defined policis on varies hard platform
+* policy.yaml : pre-defined policies for different hardware platforms
 * acl/ : contains ACL setting for RMD
 * cert/ : certifications for RMD if TLS is enabled
 * pam/ : unix PAM data base
@@ -50,8 +50,8 @@ There are some sample configuration files could be found [here](../etc/rmd).
 *Don't support log to stdout and file simultaneously*
 
 ### [database] section
-* backend: which database backend want to use, support bolt and mgo.
-* transport: for bolt db, it's a file path; for mgo, it's a connection uri.
+* backend: which database backend want to use, currently rmd support only bolt db.
+* transport: for bolt db, it's a file path;
 * dbname: what database name rmd will use.
 
 
@@ -91,8 +91,24 @@ RMD depends on authorization library [casbin](https://github.com/casbin/casbin) 
 This section will be used if `clientauth` is not set to `no`
 * service: the name of pam service
 
+### [pstate] section
+`pstate` section is optional and contains configuration for external P-State module. By default, when this section does not exists, P-State module is disabled (not loaded).
+
+* enabled: plugin enable/disable flag (allowed values: *true*, *false*)
+* path: path to loadable plugin file (.so library) with P-State implementation
+* port: port number with plugin's http server (REST API)
+
+To have P-State plugin active it is necessary to set *enabled* flag to true, provide path to .*so* library containing plugin implementation and set TCP port. If plugin library path not provided or library is not compatible (ex. no necessary symbols found) it will be rejected and RMD will immediately exit with proper error message.
+
+P-State is composed of two parts: client side (implemented as RMD plugin) and server side (separate running process). Communication between these two sides is realized using TCP connection. Provided *port* parameter defines number of local TCP port on which P-State server side is listening.
+
 ## policy.toml/policy.yaml
-This policy file contians the alias of the MaxCache/MinCache and group them into different tiers, user could spcify the tier name like `gold`/`silver`/`bronze` which has defined in this policy file in his workload create request instead of using max/minx cache. This file path can be configured in `rmd.toml` default section `policypath` option, RMD supports yaml, toml for now.
+This file contains policies for Cache plugin (catpolicy) and optional P-State plugin (pstatepolicy). Policies are pre-defined sets of paramters for different levels of service (different tiers). Currently 3 tiers are supported: `gold`, `silver` and `bronze`.
+
+Policy (tier) can be selected during workload creation. If 'policy' given in workload description during creation (POST) or update (PATCH) request then manualy specified parameters
+are ignored.
+
+Polocy file path is configured in `rmd.toml` default section as `policypath` option. RMD currently supports yaml, toml as a policy file format.
 
 ## cpu_map.toml
 

@@ -2,7 +2,7 @@ swagger: '2.0'
 info:
   title: RMD API
   description: Resource Management Daemon API specification
-  version: "0.0.1"
+  version: "0.2.0"
   contact:
     name: RMD API Support
     url: http://www.rmd.org
@@ -80,15 +80,21 @@ paths:
             type: string
             example:
               core_ids: ["22"]
-              max_cache: 4
-              min_cache: 2
+              cache:
+                max: 4
+                min: 2
+              pstate:
+                ratio: 0.7
+                monitoring: "on"
       responses:
-        200:
-          description: Workload object
+        201:
+          description: New Workload object created
           schema:
             type: array
             items:
               $ref: '#/definitions/Workload'
+        400:
+          description: Bad request
   /workloads/{workload_id}:
     get:
       summary: Get workload by id
@@ -140,8 +146,11 @@ paths:
         schema:
           type: string
           example:
-            max_cache: 4
-            min_cache: 2
+            cache:
+              max: 4
+              min: 2
+            pstate:
+              monitoring: "off"
       responses:
         200:
           description: Workload object
@@ -174,18 +183,48 @@ paths:
             $ref: '#/definitions/Score'
   /policy:
     get:
-      summary: List pre-defined cache policy
+      summary: List pre-defined workload policies for submodules
       description: |
-        List pre-defined cache policies
+        List pre-defined policies for cache and pstate module (if enabled)
       tags:
         - policy
       responses:
         200:
           description: list of pre-defined policies
           schema:
+            $ref: '#/definitions/Policy'
+  /pstate:
+    get:
+      summary: List of all Pstate configurations
+      description: |
+        Get list of P-State configurations for all available cores. This endpoint needs external RMD plugin configured and loaded.
+      tags:
+        - pstate
+      responses:
+        200:
+          description: List of Pstate objects
+          schema:
             type: array
             items:
-              $ref: '#/definitions/Policy'
+              $ref: '#/definitions/Pstate'
+  /pstate/{core_id}:
+    get:
+      summary: Pstate configuration for core with given id
+      description: |
+        Get P-State configuration for CPU core defined by id.
+      parameters:
+      - name: core_id
+        in: path
+        description: CPU core id
+        required: true
+        type: string
+      tags:
+        - pstate
+      responses:
+        200:
+          description: Pstate configuration object
+          schema:
+            $ref: '#/definitions/Pstate'
 definitions:
   CacheSummary:
     type: object
@@ -251,14 +290,30 @@ definitions:
         items:
           type: string
       policy:
-        description: Workload priority tier
+        description: Name of policy used to configure this workload
         type: string
       status:
-        description: Workload priority tier
+        description: Workload creation status
         type: string
       cos_name:
-        description: Workload priority tier
+        description: Corresponding Class Of Service name
         type: string
+      pstate:
+        description: Parameters of external P-State plugin
+        type: object
+        properties:
+          ratio:
+            type: number
+          monitoring:
+            type: string
+      cache:
+        description: Cache ways assignments configuration
+        type: object
+        properties:
+          min:
+            type: integer
+          max:
+            type: integer
   CacheScore:
     type: object
     properties:
@@ -269,25 +324,43 @@ definitions:
     properties:
       score:
         $ref: '#/definitions/CacheScore'
-  Tier:
+  CachePolicy:
     type: object
     properties:
-      MaxCache:
-        type: string
-      MinCache:
-        type: string
+      max:
+        type: integer
+      min:
+        type: integer
+  PstatePolicy:
+    type: object
+    properties:
+      ratio:
+        type: number
+  ComplexPolicy:
+    type: object
+    properties:
+      cache:
+        $ref: '#/definitions/CachePolicy'
+      pstate:
+        $ref: '#/definitions/PstatePolicy'
   Policy:
     type: object
     properties:
       gold:
-        type: array
-        items:
-          $ref: '#/definitions/Tier'
-      silver-bf:
-        type: array
-        items:
-          $ref: '#/definitions/Tier'
-      bronze-shared:
-        type: array
-        items:
-          $ref: '#/definitions/Tier'
+        $ref: '#/definitions/ComplexPolicy'
+      silver:
+        $ref: '#/definitions/ComplexPolicy'
+      bronze:
+        $ref: '#/definitions/ComplexPolicy'
+  Pstate:
+    type: object
+    properties:
+      core_id:
+        type: integer
+        description: number of CPU core [0-...]
+      monitoring:
+        type: string
+        description: core monitoring activation flag ("on" or "off")
+      ratio_threshold:
+        type: number
+        description: CPU branch-miss/branch-hits ratio threshold

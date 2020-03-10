@@ -58,11 +58,11 @@ OS group is the default group, so if no one explicitly moves a task or workload 
 
 Tasks in the infra group are pre-configured in the configuration file. No API is provided to assign a task to the infra group dynamically.
 
-End users make their cache requirements by specifying two values ("max\_cache" and "min\_cache") associated with the workload:
+End users make their cache requirements by specifying two values in Cache section (*max* and *min*) associated with the workload:
 
-* max\_cache == min\_cache > 0 &nbsp;&nbsp;&nbsp;&nbsp; ==> guaranteed group
-* max\_cache >  min\_cache > 0 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ==> best effort group
-* max\_cache == min\_cache == 0&nbsp;&nbsp;&nbsp; ==> shared group
+* max == min > 0 &nbsp;&nbsp;&nbsp;&nbsp; ==> guaranteed group
+* max > min > 0 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ==> best effort group
+* max == min == 0 &nbsp;&nbsp;&nbsp;==> shared group
 
 ## Architecture ##
 
@@ -86,7 +86,7 @@ Please refer to the [API documentation](docs/api/v1/swagger.yaml) for a comprehe
 This entry point and its sub-categories are to get system cache information. so only "GET" method is accepted by this entry point.
 
 ### "/workloads" entry point ###
-Through the "/workloads" entry point you can specify a workload by CPU IDs and/or task IDs. And specify the workload's demand of caches in one of two ways. The first way is to specify the "max\_cache/min\_cache" values explicitly as aforementioned. The second way is to associate the workload with one of the pre-defined "policies" (see below "/policy" entry point). The pre-defined policies have pre-defined "max\_cache/min\_cache" values that they are translated into.
+Through the "/workloads" entry point you can specify a workload by CPU IDs and/or task IDs. And specify the workload's demand of caches in one of two ways. The first way is to specify the Cache *max*/*min*" values explicitly as aforementioned. The second way is to associate the workload with one of the pre-defined "policies" (see below "/policy" entry point). The pre-defined policies have pre-defined *max*/*min* values that they are translated into.
 
 ### "/hospitality" entry point ###
 The reason behind this "/hospitality" entry point is that there are often the needs to know how well a host can do to fulfill a certain cache allocation requirement. This requirement usually comes from scheduling in a large cluster deployment. So the notion of "hospitality score" is introduced.

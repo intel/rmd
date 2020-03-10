@@ -29,9 +29,12 @@ RMD will try to search `/usr/local/etc/rmd`, `/etc/rmd`, `./etc/rmd` to find
 configure files, put configuration files into these directory or RMD will
 use default configurations.
 
-Here's a sample for the main configure file of RMD.
+Default location for main RMD configuration file is: /usr/local/etc/rmd/rmd.toml
 
-Sample configuration file: (/usr/local/etc/rmd/rmd.toml)
+#### Cache module configuration and usage
+
+Below extract from main configuration file (rmd.toml) presents sample Cache module configuration
+
 ```
 [OSGroup] # mandatory
 cacheways = 1
@@ -49,6 +52,7 @@ max_allowed_shared = 10 # max allowed workload in shared pool, default is 10
 guarantee = 10
 besteffort = 7
 shared = 2
+
 ```
 
 Comments of the directives in the above conf:
@@ -77,6 +81,32 @@ guarantee:  0000 0000 0111 1111 1110
 besteffort: 0011 1111 1000 0000 0000
 shared:     1100 0000 0000 0000 0000
 ```
+
+#### P-State module configuration and usage
+
+P-State module is designed to change CPU core frequency based on it's load defined as a branch prediction miss/hits ratio.
+If current branch ratio is higher than selected threshold then CPU core frequency is set to predefined maximal value (can be CPU max frequency).
+When branch ratio on given core falls below the selected threshold then core frequency is set to minimal.
+
+Below extract from main configuration file (*rmd.toml*) presents sample configuration for optional P-State module.
+
+```
+[pstate]
+## Simple plugin enable/disable flag
+enabled = true
+## path to loadable plugin file (.so library) with P-State implementation
+path = "/usr/local/etc/rmd/plugins/pstatelib.so"
+## port number with plugin's http server (REST API)
+port = 8080
+```
+
+This module is not an integral part of RMD binary but a loadable external plugin. To have P-State module working it is necessary to add section from above to *rmd.toml* and also provide *.so* file with plugin implementation.
+
+While providing plugin binary and setting the ***path*** it is crucial to remember that this location (thus this file) has to be readable for both *root* and *rmd* user. Otherwise RMD processes will not be able to load and use plugin library.
+
+If ***enabled*** flag is set to *false* plugin file existence will not be checked and plugin will not be loaded (even if exists).
+
+***port*** is the number of listening port where branch_monitor's http server with REST API is available.
 
 ### Prepare the credentials
 
@@ -160,27 +190,50 @@ some *policies* for target system(Intel platform).
 
 ### Create a workload
 
-A workload could be a running task(s) or some CPU(s) which want to allocate
-cache for them.
+A workload could be a running task(s) or some set of CPU(s)/Core(s) with cache
+allocation information and branch ratio settings.
 
 The task(s)/CPU(s) will be verified, otherwise RMD will fail your request.
 
 Besides you need to specify what policy of the workload will be used.
 
-The payload body can contain:
+Depending on available modules the payload body can contain only Cache related params:
 
 ```json
 {
-    "task_ids": A validate task id list
-    "core_ids": cpu core list, for the topology, check cache information
-    "policy": pre-defined policy in RMD
-    "max_cache": maximum cache ways which can be benefited
-    "min_cache": minmum cache ways which can be benefited
+    "task_ids": [ "A validate task id list" ],
+    "core_ids": [ "cpu core list, for the topology, check cache information" ],
+    "policy": "pre-defined policy in RMD",
+    "cache" : {
+        "max": "maximum cache ways which can be benefited",
+        "min": "minmum cache ways which can be benefited"
+    }
 }
 ```
 
-You can not neither specify policy and max_cache/min_cache at same time, that
-is ambiguous to RMD.
+or also P-State params
+
+```json
+{
+    "task_ids": [ "A validate task id list" ],
+    "core_ids": [ "cpu core list, for the topology, check cache information" ],
+    "policy": "pre-defined policy in RMD",
+    "cache" : {
+        "max": "maximum cache ways which can be benefited",
+        "min": "minmum cache ways which can be benefited"
+    },
+    "pstate" : {
+        "ratio": "P-State branch ratio",
+        "monitoring": "core(s) monitoring (on or off)"
+    }
+}
+```
+
+For more information about enabling P-State module see [this section](#p-state-module-configuration-and-usage).
+
+Policy (if defined) has higher priority than manually specified params. If policy given
+in workload creation request then max_cache, min_cache, pstate_br and monitoring are not
+needed (ignored if provided).
 
 An example:
 
@@ -189,24 +242,39 @@ with process id `78377`
 
 ```shell
 $ curl -H "Content-Type: application/json" --request POST --data \
-         '{"task_ids":["78377"], "policy": "gold"}' \
+         '{"task_ids":["78377"],
+           "policy": "gold"}' \
          http://127.0.0.1:8081/v1/workloads
 ```
 
-2) Create workload with max_cache, min_cache.
+2) Create workload with manually specified parameters without P-State plugin data.
 
 ```shell
 $ curl -H "Content-Type: application/json" --request POST --data \
-         '{"task_ids":["78377"], "max_cache": 4, "min_cache": 4}' \
-         http://127.0.0.1:8888/v1/workloads
+         '{"task_ids" : ["78377"],
+           "cache" : {"max": 4, "min": 4 } }' \
+         http://127.0.0.1:8081/v1/workloads
 ```
+
+Please note that it is not allowed (and treated as error) to provide *pstate* parameters section if P-State plugin not enabled in configuration.
+
+3) Create workload with manually specified parameters with P-State plugin enabled
+
+```shell
+$ curl -H "Content-Type: application/json" --request POST --data \
+         '{"task_ids" : ["78377"],
+           "cache" : {"max": 4, "min": 4 },
+           "pstate" : {"ratio": 3.0, "monitoring" : "on"} }' \
+         http://127.0.0.1:8081/v1/workloads
+```
+
+Last param, *monitoring*, can be omitted when defining *ratio* and then the default value "on" will be used.
 
 3) Delete a workload by the workload id, you will find it from the
 output of the create response.
 
 ```shell
-$ curl -H "Content-Type: application/json" \
-        --request DELETE  http://127.0.0.1:8888/v1/workloads/${WORKLOAD_ID}
+$ curl -H --request DELETE  http://127.0.0.1:8081/v1/workloads/${WORKLOAD_ID}
 ```
 
 Admin can change and add new policies by editing an toml/yaml file which is
@@ -238,7 +306,7 @@ To get hospitality score:
 ```shell
 $ curl -H "Content-Type: application/json" --request POST --data \
          '{"max_cache": 2, "min_cache": 2}' \
-         http://127.0.0.1:8888/v1/hospitality
+         http://127.0.0.1:8081/v1/hospitality
 {
     "score": {
         "l3": {
