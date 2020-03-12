@@ -4,15 +4,14 @@ package integration_test
 
 import (
 	"fmt"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"net/http"
 	"os"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	"github.com/intel/rmd/lib/resctrl"
-	"github.com/intel/rmd/lib/util"
-	"github.com/intel/rmd/test/test_helpers"
+	testhelpers "github.com/intel/rmd/test/test_helpers"
+	util "github.com/intel/rmd/utils/bitmap"
+	"github.com/intel/rmd/utils/resctrl"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
@@ -86,22 +85,25 @@ var _ = Describe("Workload", func() {
 })
 
 func verifyWrokload(he *httpexpect.Expect, data map[string]interface{}) {
-
 	repobj := he.POST("/").WithHeader("Content-Type", "application/json").
 		WithJSON(data).
 		Expect().
 		Status(http.StatusCreated).JSON().Object()
 
+	fmt.Println("Response :", repobj)
+	fmt.Println("CACHE: ", repobj.Value("cache"), data["cache"])
+
 	workloadId := repobj.Value("id").String().Raw()
 	cosName := repobj.Value("cos_name").String().Raw()
 	resall := resctrl.GetResAssociation()
+
+	fmt.Println("Resall : ", resall, resall[cosName])
 
 	repobj.Value("status").Equal("Successful")
 	if p, ok := data["policy"]; ok {
 		repobj.Value("policy").Equal(p)
 	} else {
-		repobj.Value("max_cache").Equal(data["max_cache"])
-		repobj.Value("min_cache").Equal(data["min_cache"])
+		repobj.Value("cache").Equal(data["cache"])
 	}
 
 	res, ok := resall[cosName]
@@ -113,13 +115,21 @@ func verifyWrokload(he *httpexpect.Expect, data map[string]interface{}) {
 		repobj.Value("task_ids").Equal(tids)
 		Ω(res.Tasks).Should(Equal(tids))
 	} else {
+		fmt.Println("Core_ids : ", repobj.Value("core_ids"), data["core_ids"])
 		repobj.Value("core_ids").Equal(data["core_ids"])
+		fmt.Println("Core_ids : ", repobj.Value("core_ids"), data["core_ids"])
 		cpubm, _ := util.NewBitmap(data["core_ids"])
 		rescpubm, _ := util.NewBitmap(res.CPUs)
+		fmt.Println("res.CPUs:", res.CPUs)
+		fmt.Println("data", data["core_ids"])
+		fmt.Println("cpubm", cpubm)
+		fmt.Println("rescpubm", rescpubm)
+		fmt.Println("resc", rescpubm.ToHumanString())
+		fmt.Println("cpu", cpubm.ToHumanString())
 		Ω(rescpubm.ToHumanString()).Should(Equal(cpubm.ToHumanString()))
 	}
 
-	if maxCache, ok := data["max_cache"]; ok && maxCache == 0 {
+	if maxCache, ok := data["cache"].(map[string]int)["max"]; ok && maxCache == 0 {
 		repobj.Value("cos_name").Equal("shared")
 	}
 

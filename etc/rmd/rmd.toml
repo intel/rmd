@@ -5,11 +5,13 @@ title = "RMD config"
 [default]
 # address = "localhost"
 # policypath = "/user/local/etc/rmd/policy.toml"
+# sysresctrl = "/sys/fs/resctrl"
 # tlsport = 8443 # requires a port number higher than 1024
 # certpath = "/usr/local/etc/rmd/cert/server" # Only support pem format, hard code that CAFile is ca.pem, CertFile is rmd-cert.pem, KeyFile is rmd-key.pem
 # clientcapath = "/usr/local/etc/rmd/cert/client" # Only support pem format, hard code that CAFile is ca.pem
 # clientauth = "challenge"  # can be "no, require, require_any, challenge_given, challenge", challenge means require and verify.
 # unixsock = "/var/run/rmd.sock"
+# sysresctrl = "/sys/fs/resctrl"
 
 [debug]
 # enabled = false # allow rmd to run without any auth with http protocol
@@ -22,8 +24,8 @@ title = "RMD config"
 # stdout = true
 
 [database]
-# backend = "bolt" # mgo
-# transport = "/var/run/rmd/rmd.db" # mongodb://localhost
+# backend = "bolt"
+# transport = "/var/run/rmd/rmd.db"
 # dbname = "rmd"
 
 [OSGroup] # mandatory
@@ -53,3 +55,20 @@ title = "RMD config"
 
 [pam]
 # service = "rmd"
+
+[pstate]
+## Simple plugin enable/disable flag
+enabled = true
+## path to loadable plugin file (.so library) with P-State implementation
+path = "/usr/local/etc/rmd/plugins/pstatelib.so"
+## port number with plugin's http server (REST API)
+port = 8080
+
+[openstack]
+# Path below is optional. If not given then file will not be generated
+providerConfigPath = "/etc/nova/provider_config/rmd.yaml"
+amqpuri = "amqp://test:test@localhost:5672/" # URI to openstack amqp server, required to subscribe to nova notifications
+bindingKey = "versioned_notifications.info"
+keystoneUrl = "http://10.237.214.102/identity/v3/auth/tokens"  # URI to Keystone server, required to get token
+keystoneLogin = "admin"
+keystonePassword = "nimda"

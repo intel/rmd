@@ -1,26 +1,38 @@
-# This is policy file for rmd
-
-title = "RMD policy definition"
-
-[[catpolicy]]
-    [[catpolicy.broadwell]]
-        [[catpolicy.broadwell.gold]]
-            MaxCache = 4
-            MinCache = 4
-        [[catpolicy.broadwell.silver-bf]]
-            MaxCache = 2
-            MinCache = 1
-        [[catpolicy.broadwell.bronze-shared]]
-            MaxCache = 0
-            MinCache = 0
-[[catpolicy]]
-    [[catpolicy.skylake]]
-        [[catpolicy.skylake.gold]]
-            MaxCache = 3
-            MinCache = 3
-        [[catpolicy.skylake.silver-bf]]
-            MaxCache = 2
-            MinCache = 1
-        [[catpolicy.skylake.bronze-shared]]
-            MaxCache = 0
-            MinCache = 0
+[broadwell]
+  [broadwell.gold]
+    [broadwell.gold.cache]
+    max = 2
+    min = 2
+    [broadwell.gold.pstate]
+    ratio = 1.5
+  [broadwell.silver]
+    [broadwell.silver.cache]
+    max = 2
+    min = 1
+    [broadwell.silver.pstate]
+    ratio = 2.5
+  [broadwell.bronze]
+    [broadwell.bronze.cache]
+    max = 0
+    min = 0
+    [broadwell.bronze.pstate]
+    ratio = 3.5
+[skylake]
+  [skylake.gold]
+    [skylake.gold.cache]
+    max = 4
+    min = 4
+    [skylake.gold.pstate]
+    ratio = 0.25
+  [skylake.silver]
+    [skylake.silver.cache]
+    max = 3
+    min = 1
+    [skylake.silver.pstate]
+    ratio = 0.5
+  [skylake.bronze]
+    [skylake.bronze.cache]
+    max = 0
+    min = 0
+    [skylake.bronze.pstate]
+    ratio = 0.75

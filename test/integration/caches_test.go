@@ -10,8 +10,8 @@ import (
 
 	"gopkg.in/gavv/httpexpect.v1"
 
-	syscache "github.com/intel/rmd/lib/cache"
-	"github.com/intel/rmd/test/test_helpers"
+	"github.com/intel/rmd/modules/cache"
+	testhelpers "github.com/intel/rmd/test/test_helpers"
 )
 
 var cacheSchemaTemplate string = `{
@@ -107,7 +107,7 @@ var _ = Describe("Caches", func() {
 						"pint": testhelpers.PositiveInteger,
 					})
 
-				llc = syscache.GetLLC()
+				llc = cache.GetLLC()
 			})
 
 			It("Should be return 200 for llc ", func() {
