@@ -50,13 +50,12 @@ func CleanupProcesses(ps []*os.Process) {
 
 // AssembleRequest assemble the request body by given process id and max, min cache or policy
 func AssembleRequest(processes []*os.Process, coreIds []string, maxCache, minCache int, policy string) map[string]interface{} {
-	data := make(map[string]interface{}, 0)
-
+	data := map[string]interface{}{}
 	if policy != "" {
 		data["policy"] = policy
 	} else {
-		data["max_cache"] = maxCache
-		data["min_cache"] = minCache
+		params := map[string]int{"max": maxCache, "min": minCache}
+		data["cache"] = params
 	}
 
 	var taskIds []string
@@ -74,65 +73,73 @@ func AssembleRequest(processes []*os.Process, coreIds []string, maxCache, minCac
 	return data
 }
 
+// ConfigInit initializes config
 func ConfigInit(path string) error {
 	viper.SetConfigType("toml")
-	viper.SetConfigName("rmd") // name of config file (without extension)
-	viper.AddConfigPath("/tmp")     // path to look for the config file in
-	err := viper.ReadInConfig()     // Find and read the config file
+	viper.SetConfigName("rmd")  // name of config file (without extension)
+	viper.AddConfigPath("/tmp") // path to look for the config file in
+	err := viper.ReadInConfig() // Find and read the config file
 	return err
 }
 
-// just simple wraper for config Unmarshal
+// GetConfigOptions is just simple wraper for config Unmarshal
 func GetConfigOptions(rawVal interface{}) error {
 	return viper.Unmarshal(rawVal)
 }
 
-// just simple wraper for config UnmarshalKey
+// GetConfigOption is just simple wraper for config UnmarshalKey
 func GetConfigOption(key string, rawVal interface{}) error {
 	return viper.UnmarshalKey(key, rawVal)
 }
 
+//GetConfigDebugPort getter for Debug port
 func GetConfigDebugPort() int {
 	var port int
 	GetConfigOption("debug.debugport", &port)
 	return port
 }
 
+//GetConfigTLSPort getter for TLS port
 func GetConfigTLSPort() int {
 	var port int
 	GetConfigOption("default.tlsport", &port)
 	return port
 }
 
+//GetConfigAddr getter for address
 func GetConfigAddr() string {
 	var addr string
 	GetConfigOption("default.address", &addr)
 	return addr
 }
 
+//GetHTTPV1URL getter for HTTPV1URL
 func GetHTTPV1URL() string {
 	return fmt.Sprintf(
 		"http://%s:%d/v1/", GetConfigAddr(), GetConfigDebugPort())
 }
 
+//GetHTTPSV1URL getter for HTTPSV1URL
 func GetHTTPSV1URL() string {
 	return fmt.Sprintf(
 		"https://%s:%d/v1/", GetConfigAddr(), GetConfigTLSPort())
 }
 
+//GetClientAuthType getter for client auth type
 func GetClientAuthType() string {
 	var clientAuthTypePath string
 	GetConfigOption("default.clientauth", &clientAuthTypePath)
 	return clientAuthTypePath
 }
 
+//GetPolicyPath getter for path with policy
 func GetPolicyPath() string {
 	var policyPath string
 	GetConfigOption("default.policypath", &policyPath)
 	return policyPath
 }
 
-// usage:
+// FormatByKey usage:
 //       m := map[string]interface{}{"name": "John", "age": 47}
 //       s := "Hi {{.name}}. Your age is {{.age}}\n"
 //		 result, err := FormatByKey(s, m)

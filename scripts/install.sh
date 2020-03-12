@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
+GO_MINOR_VERSION=$(go version | cut -c 14- | cut -d' ' -f1 | cut -d'.' -f2)
 
+if [ ${GO_MINOR_VERSION} -l 11 ]; then
+	echo "unsupported go version. require >= go1.11"
+	exit 1
+fi
+
+export GO111MODULE=on
 BASE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $BASE/go-env
 
@@ -27,4 +34,4 @@ else
 fi
 
 DATA="\"logfile\":\"$LOGFILE\", \"dbtransport\":\"$DBFILE\", \"logtostdout\":false"
-go run $BASE/../cmd/gen_conf.go -path /usr/local/etc/rmd/rmd.toml -data "{$DATA}"
+gen_conf -path /usr/local/etc/rmd/rmd.toml -data "{$DATA}"

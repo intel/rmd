@@ -1,0 +1,19 @@
+# Helper script for setting correct Go build tags based on make options
+
+while getopts ":b:" opt; do
+  case ${opt} in
+    b)
+        if [ "$OPTARG" != "standard" ];
+        then
+            export GOBUILDOPTS="-tags $OPTARG"
+        fi
+      ;;
+    *)
+      ;;
+  esac
+done
+
+if [ ! -z "$GOBUILDOPTS" ];
+then
+    echo "Non-standard build tags used: $GOBUILDOPTS"
+fi

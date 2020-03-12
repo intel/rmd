@@ -7,6 +7,23 @@ BASE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PAMSRCFILE="$BASE/../etc/rmd/pam/test/rmd"
 PAMDIR="/etc/pam.d"
 BERKELEYDBFILENAME="rmd_users.db"
+__proj_dir="$(dirname "$__dir")"
+
+GO_MINOR_VERSION=$(go version | cut -c 14- | cut -d' ' -f1 | cut -d'.' -f2)
+
+# rebuild binaries:
+export GOOS=${GOOS:-$(go env GOOS)}
+export GOARCH=${GOARCH:-$(go env GOARCH)}
+
+if [[ "${GOARCH}" == "amd64" ]]; then
+    build_path="${__proj_dir}/build/${GOOS}/x86_64"
+else
+    build_path="${__proj_dir}/build/${GOOS}/${GOARCH}"
+fi
+
+if [ ${GO_MINOR_VERSION} -ge 11 ]; then
+        export GO111MODULE=on
+fi
 
 source $BASE/go-env
 
@@ -29,14 +46,17 @@ fi
 
 rm -rf users
 
+# load code for setting GOBUILDOPTS variable based on command line params
+source $BASE/build-opts-get
+
 cd $BASE/..
 if [ "$1" == "-u" ]; then
-    go test -short -v -cover $(glide novendor | grep -v /test/)
+    go test $GOBUILDOPTS -short -v -cover $(glide novendor | grep -v /test/)
     exit $?
 fi
 
 if [ "$1" != "-i" -a "$1" != "-s" ]; then
-    go test -short -v -cover $(glide novendor | grep -v /test/)
+    go test $GOBUILDOPTS -short -v -cover $(glide novendor | grep -v /test/)
 fi
 cd -
 
@@ -90,7 +110,7 @@ fi
 
 DATA="$DATA, \"policypath\":\"/tmp/policy.toml\", \"dbtransport\":\"/tmp/rmd.db\", \"stdout\":false, \"logfile\":\"/tmp/rmd.log\""
 
-go run $BASE/../cmd/gen_conf.go -path ${CONFFILE} -data "{$DATA}"
+go run $GOBUILDOPTS $BASE/../cmd/gen_conf/gen_conf.go -path ${CONFFILE} -data "{$DATA}"
 
 if [ $? -ne 0 ]; then
     echo "Failed to generate configure file. Exit."
@@ -101,28 +121,24 @@ cp -r $BASE/../etc/rmd/policy.toml /tmp/policy.toml
 
 cat $CONFFILE
 
-go install github.com/intel/rmd
-if [ $? -ne 0 ]; then
-    echo "Failed to build rmd, please correct build issue."
-    exit 1
-fi
+cp ${build_path}/rmd .
 
 if [ "$1" == "-s" ]; then
-    ${GOPATH}/bin/rmd --conf-dir ${CONFFILE%/*} &
+    ./rmd --conf-dir ${CONFFILE%/*} &
 else
-    ${GOPATH}/bin/rmd --conf-dir ${CONFFILE%/*} --debug &
+    ./rmd --conf-dir ${CONFFILE%/*} -d &
 fi
 
 sleep 1
 
 if [ "$1" == "-s" ]; then
     if [ "$2" == "-nocert" ]; then
-        CONF=$CONFFILE ${GOPATH}/bin/ginkgo -v -tags "integrationHTTPS" --focus="PAMAuth" ./test/integrationHTTPS/...
+        CONF=$CONFFILE ${GOPATH}/bin/ginkgo -v -tags "integrationHTTPS" --focus="PAMAuth" ./test/integrationHTTPS
     else
-        CONF=$CONFFILE ${GOPATH}/bin/ginkgo -v -tags "integrationHTTPS" --focus="CertAuth" ./test/integrationHTTPS/...
+        CONF=$CONFFILE ${GOPATH}/bin/ginkgo -v -tags "integrationHTTPS" --focus="CertAuth" ./test/integrationHTTPS
     fi
 else
-    CONF=$CONFFILE ${GOPATH}/bin/ginkgo -v -tags "integration" ./test/integration/...
+    CONF=$CONFFILE ${GOPATH}/bin/ginkgo -v -tags "integration" ./test/integration
 fi
 
 rev=$?
@@ -130,7 +146,7 @@ rev=$?
 # cleanup
 kill -TERM `cat $PID`
 umount /sys/fs/resctrl
-rm ${GOPATH}/bin/rmd
+
 
 # cleanup PAM files
 if [ "$1" == "-s" -a "$2" == "-nocert" ]; then
@@ -143,4 +159,5 @@ if [[ $rev -ne 0 ]]; then
 else
     echo ":) >>> Functional testing passed ."
 fi
+rm rmd
 exit $rev

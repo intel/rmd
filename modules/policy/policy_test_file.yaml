@@ -1,0 +1,8 @@
+  # file only for policy module test purposes
+  skylake:
+    gold:
+        cache:
+            max: 2
+            min: 2
+        pstate:
+            ratio: 1.5

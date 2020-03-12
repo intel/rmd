@@ -5,6 +5,8 @@ p, user, /policy, GET
 p, user, /workloads, GET
 p, user, /workloads/*, GET
 p, user, /hospitality, GET
+p, user, /pstate, GET
+p, user, /pstate/*, GET
 
 p, root, /workloads, POST
 p, root, /workloads/*, (PATCH)|(DELETE)

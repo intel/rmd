@@ -1,14 +1,17 @@
 package testhelpers
 
-var BoolSchema string = `{
+// BoolSchema schema
+var BoolSchema = `{
 		"type": "boolean"
 	}`
 
-var PositiveInteger string = `{
+// PositiveInteger schema
+var PositiveInteger = `{
 	"type": ["integer", "string"],
 	"pattern": "^[0-9]*$", "minimum": 1
 }`
 
+// NonNegativeInteger schema
 var NonNegativeInteger = `{
 	"type": ["integer", "string"],
 	"pattern": "^[0-9]*$", "minimum": 0

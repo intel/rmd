@@ -12,6 +12,12 @@ revision=$( git rev-parse --short HEAD 2> /dev/null || echo 'unknown' )
 branch=$( git rev-parse --abbrev-ref HEAD 2> /dev/null || echo 'unknown' )
 go_version=$( go version | sed -e 's/^[^0-9.]*\([0-9.]*\).*/\1/' )
 
+GO_MINOR_VERSION=$( go version | cut -c 14- | cut -d' ' -f1 | cut -d'.' -f2)
+
+if [[ ${GO_MINOR_VERSION} -ge 11 ]]; then
+	export GO111MODULE=on
+fi
+
 echo "git commit: $(git log --pretty=format:"%H" -1)"
 
 # rebuild binaries:
@@ -34,4 +40,8 @@ ldflags="
     -X ${__repo_path}/version.BuildDate=${BUILD_DATE}
     -X ${__repo_path}/version.GoVersion=${go_version}"
 
-go build -i -v -ldflags "$ldflags" -o ${build_path}/rmd .  || exit 1
+# load code for setting GOBUILDOPTS variable based on command line params
+source $BASE/build-opts-get
+
+go build -i -v $GOBUILDOPTS -ldflags "$ldflags" -o ${build_path}/rmd ./cmd/rmd  || exit 1
+go build -i -v $GOBUILDOPTS -ldflags=-linkmode=external -o ${build_path}/gen_conf $BASE/../cmd/gen_conf/gen_conf.go  || exit 1
