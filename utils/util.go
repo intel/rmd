@@ -120,3 +120,26 @@ func DropRunAs(name string, debug bool, files ...*os.File) (*os.Process, error) 
 	//cmd.Process.Release()
 	return cmd.Process, nil
 }
+
+// IsRegularFile checks if given path point to a file - not to symlink nor directory
+func IsRegularFile(path string) (bool, error) {
+	// try to call 'stat' - if failed then probably file does not exists
+	finfo, err := os.Lstat(path)
+	if err != nil {
+		return false, err
+	}
+
+	// check if is dir
+	if finfo.IsDir() {
+		return false, nil
+	}
+
+	// check if is regular file (will return true also for hardlink)
+	fmode := finfo.Mode()
+	if !fmode.IsRegular() {
+		return false, nil
+	}
+
+	// no problem found with path - return true
+	return true, nil
+}

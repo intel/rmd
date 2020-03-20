@@ -434,10 +434,15 @@ func GetCosInfo() CosInfo {
 		targetLev := strconv.FormatUint(uint64(level), 10)
 		cacheLevel := "l" + targetLev
 
-		catCosInfo.CbmMaskLen = util.CbmLen(rcinfo[cacheLevel].CbmMask)
-		catCosInfo.MinCbmBits = rcinfo[cacheLevel].MinCbmBits
-		catCosInfo.NumClosids = rcinfo[cacheLevel].NumClosids
-		catCosInfo.CbmMask = rcinfo[cacheLevel].CbmMask
+		if value, ok := rcinfo[cacheLevel]; ok {
+			log.Debugf("rcinfo[cacheLevel]: %v", value)
+			catCosInfo.CbmMaskLen = util.CbmLen(value.CbmMask)
+			catCosInfo.MinCbmBits = value.MinCbmBits
+			catCosInfo.NumClosids = value.NumClosids
+			catCosInfo.CbmMask = value.CbmMask
+		} else {
+			log.Warningf("Missing data for specified cache level: %v\n", cacheLevel)
+		}
 	})
 	return *catCosInfo
 }

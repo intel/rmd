@@ -29,7 +29,7 @@ func Test_loadPolicy(t *testing.T) {
 	var pstateParam = Param{"ratio": "1.5"}
 	var testModule = Module{"cache": cacheParam, "pstate": pstateParam}
 	var testPolicy = Policy{"gold": testModule}
-	var testArch = CPUArchitecture{"skylake": testPolicy}
+	var testArch = CPUArchitecture{"skylake": testPolicy, "broadwell": testPolicy}
 
 	tests := []struct {
 		name    string

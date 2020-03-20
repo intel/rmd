@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/intel/rmd/utils"
 	appConf "github.com/intel/rmd/utils/config"
 	"github.com/intel/rmd/utils/cpu"
 	log "github.com/sirupsen/logrus"
@@ -111,6 +112,11 @@ func loadPolicy() (CPUArchitecture, error) {
 		err := fmt.Errorf("Unsupported policy file type extension %s", configType)
 		log.Errorf("error: %v", err)
 		return nil, err
+	}
+
+	isfile, err := util.IsRegularFile(appconf.Def.PolicyPath)
+	if err != nil || !isfile {
+		return nil, fmt.Errorf("Invalid policy file path %s", appconf.Def.PolicyPath)
 	}
 
 	text, err := ioutil.ReadFile(appconf.Def.PolicyPath)

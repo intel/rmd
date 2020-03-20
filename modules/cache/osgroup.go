@@ -95,20 +95,16 @@ func SetOSGroup() error {
 
 	for i, v := range osGroup.Schemata[cacheLevel] {
 		cacheID := strconv.Itoa(int(v.ID))
-		if !reserve.CPUsPerNode[cacheID].IsEmpty() {
-			// OSGroup is the first Group, use the edge cache ways.
-			// FIXME , left or right cache ways, need to be check.
-			conf := config.NewOSConfig()
-			request, _ := BitmapsCacheWrapper(strconv.FormatUint(1<<conf.CacheWays-1, 16))
-			// NOTE , simpleness, brutal. Reset Cache for OS Group,
-			// even the cache is occupied by other group.
-			availableWays := schemata[cacheID].Or(request)
-			expectWays := availableWays.ToBinStrings()[0]
+		// OSGroup is the first Group, use the edge cache ways.
+		// FIXME , left or right cache ways, need to be check.
+		conf := config.NewOSConfig()
+		request, _ := BitmapsCacheWrapper(strconv.FormatUint(1<<conf.CacheWays-1, 16))
+		// NOTE , simpleness, brutal. Reset Cache for OS Group,
+		// even the cache is occupied by other group.
+		availableWays := schemata[cacheID].Or(request)
+		expectWays := availableWays.ToBinStrings()[0]
 
-			osGroup.Schemata[cacheLevel][i].Mask = strconv.FormatUint(1<<uint(len(expectWays))-1, 16)
-		} else {
-			osGroup.Schemata[cacheLevel][i].Mask = GetCosInfo().CbmMask
-		}
+		osGroup.Schemata[cacheLevel][i].Mask = strconv.FormatUint(1<<uint(len(expectWays))-1, 16)
 	}
 	return proxyclient.Commit(osGroup, ".")
 }

@@ -927,23 +927,23 @@ func prepareCoreIDs(w []string) ([]int, error) {
 		dashPosition := strings.Index(value, "-")
 		if dashPosition != (-1) {
 			// '-' exists
-			beforeDashStr := value[:dashPosition]
-			afterDashStr := value[dashPosition+1:]
+			beforeDashStr := strings.TrimSpace(value[:dashPosition])
+			afterDashStr := strings.TrimSpace(value[dashPosition+1:])
 
 			beforeDash, err := strconv.Atoi(beforeDashStr)
 			if err != nil {
-				log.Errorf("Failed to convert coreID value from string to int")
+				log.Errorf("Failed to convert coreID value %v from string to int", beforeDashStr)
 				return coreids, err
 			}
 
 			afterDash, err := strconv.Atoi(afterDashStr)
 			if err != nil {
-				log.Errorf("Failed to convert coreID value from string to int")
+				log.Errorf("Failed to convert coreID value %v from string to int", afterDashStr)
 				return coreids, err
 			}
 			// syntax like "8-3" is wrong so need additional check here
 			if beforeDash > afterDash {
-				log.Errorf("Failed to convert coreID value from string to int")
+				log.Errorf("Wrong syntax for coreIDs -> %s", value)
 				return coreids, fmt.Errorf("Wrong syntax for coreIDs")
 			}
 
@@ -953,7 +953,7 @@ func prepareCoreIDs(w []string) ([]int, error) {
 				i++
 			}
 		} else {
-			intid, err := strconv.Atoi(value)
+			intid, err := strconv.Atoi(strings.TrimSpace(value))
 			if err != nil {
 				log.Errorf("Invalid core id %s - cannot continue", value)
 				return coreids, fmt.Errorf("Invalid core id in array: %s", value)

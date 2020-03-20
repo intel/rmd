@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	dbconf "github.com/intel/rmd/internal/db/config"
@@ -130,6 +131,18 @@ func main() {
 		}
 		ts := dbconf.NewConfig().Transport
 		bd := dbconf.NewConfig().Backend
+
+		// need to create dir to store db if not exists
+		tsDirPath := filepath.Dir(ts)
+		if _, err := os.Stat(tsDirPath); os.IsNotExist(err) {
+			os.Mkdir(tsDirPath, 0755) //rwxr-xr-x
+		}
+		// need to set correct ownership to that dir
+		if err := util.Chown(tsDirPath, rmduser); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
 		if bd == "bolt" {
 			if err := util.Chown(ts, rmduser); err != nil {
 				fmt.Println(err)

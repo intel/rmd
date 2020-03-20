@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"plugin"
 
+	util "github.com/intel/rmd/utils"
 	"github.com/spf13/viper"
 )
 
@@ -14,6 +15,12 @@ const (
 // Load opens file given in path param and tries to load symbol "Handle" implementing ModuleInterface
 // Returns error if failed to open file, load symbol or cast interface
 func Load(path string) (ModuleInterface, error) {
+	// additional verification if given path points to file
+	isfile, err := util.IsRegularFile(path)
+	if err != nil || !isfile {
+		return nil, fmt.Errorf("Invalid plugin path %s", path)
+	}
+
 	plg, err := plugin.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to open plugin file %s: %s", path, err.Error())
