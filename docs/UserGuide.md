@@ -171,6 +171,8 @@ $ sudo rmd --debug
 
 ## RMD service usages
 
+In this section, RMD is launched in debug mode and API calls uses insecure HTTP connection. See [possible connection types](#supported-rmd-access-modes) for more details.
+
 ### Query cache information on the host
 
 ```shell
@@ -317,6 +319,8 @@ $ curl -H "Content-Type: application/json" --request POST --data \
 }
 ```
 
+## Supported RMD access modes
+
 ### Access RMD by Unix socket:
 
 Access RMD by unit socket if it is enabled.
@@ -326,22 +330,42 @@ Requires curl >= v7.40.0
 $ sudo curl --unix-socket /your/socket/path http:/your/resource/url
 ```
 
-### Access RMD by TLS:
+### Access using HTTP requests over plain TCP connection
 
-Access RMD by TLS if it is enabled.
+This method is prepared mainly for RMD development and debugging purposes and is not recommended for use in production system.
 
-Need to config tlsport, certpath, clientcapath, clientauth options in
-configure file.
+For testing purpose, to access REST API with TLS channel disabled, please configure *debugport* param in *debug* section and launch RMD in debug mode:
 
-Using TLS and managing a CA is an advanced topic. It is not the scope of RMD.
-RMD just pre-define server certs for testing.
-
-Please do not use them in product environment.
-User can generate certs by themselves.
-
-If you want to get cache info, your can run this command:
 ```shell
-$ curl https://hostname:port/v1/cache --cert etc/rmd/cert/client/cert.pem \
+$ /path/to/rmd -d
+```
+
+or
+
+```shell
+$ /path/to/rmd --debug
+```
+
+Access to API can done by any HTTP client, like *curl*:
+
+```shell
+$ curl -i -X GET http://hostname:debugport/v1/cache
+```
+
+### Access using HTTPS over TCP connection secured by TLS:
+
+REST interface of the RMD is recommended to be used over TLS secure channel. RMD supports TLS version 1.2 with cipher suite set to *AES_128_GCM_SHA256* to provide acceptable level of security.
+
+To enable TLS connection, one has to configure *tlsport*, *certpath*, *clientcapath* and *clientauth* options in main configuration file (*rmd.toml*). Also necessary certificates (for client, sever and CA - Certificate authority) have to be provided. Additionally RMD cannot be launched in debug mode (see previous section).
+
+Certificate authority management and certificate generation is out of scope of RMD. For testing purposes, RMD provides pre-defined set of certificates. Please do ***not use these certificates in production environment***.
+
+To access RMD REST API using secure connection use HTTPS protocol and configured *tlsport*. Also provides necessary certificate chain (CA certificate, client certificate and client private key.
+
+Sample command for getting cache info over TLS connection using curl is shown below:
+
+```shell
+$ curl https://hostname:tlsport/v1/cache --cert etc/rmd/cert/client/cert.pem \
          --key etc/rmd/cert/client/key.pem \
          --cacert  etc/rmd/cert/client/ca.pem
 ```
