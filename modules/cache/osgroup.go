@@ -93,7 +93,7 @@ func SetOSGroup() error {
 		return err
 	}
 
-	for i, v := range osGroup.Schemata[cacheLevel] {
+	for i, v := range osGroup.CacheSchemata[cacheLevel] {
 		cacheID := strconv.Itoa(int(v.ID))
 		// OSGroup is the first Group, use the edge cache ways.
 		// FIXME , left or right cache ways, need to be check.
@@ -104,7 +104,7 @@ func SetOSGroup() error {
 		availableWays := schemata[cacheID].Or(request)
 		expectWays := availableWays.ToBinStrings()[0]
 
-		osGroup.Schemata[cacheLevel][i].Mask = strconv.FormatUint(1<<uint(len(expectWays))-1, 16)
+		osGroup.CacheSchemata[cacheLevel][i].Mask = strconv.FormatUint(1<<uint(len(expectWays))-1, 16)
 	}
 	return proxyclient.Commit(osGroup, ".")
 }

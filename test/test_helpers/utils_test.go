@@ -22,18 +22,18 @@ func TestCreateNewProcess(t *testing.T) {
 
 func TestAssembleRequest(t *testing.T) {
 	p, _ := CreateNewProcess("sleep 10")
-	fmt.Println(AssembleRequest([]*os.Process{p}, []string{}, 10, 10, ""))
+	fmt.Println(AssembleRequest([]*os.Process{p}, []string{}, 10, 10, -1, ""))
 	CleanupProcess(p)
 }
 
 func TestAssembleRequestMultipleProcess(t *testing.T) {
 	ps, _ := CreateNewProcesses("sleep 10", 3)
-	fmt.Println(AssembleRequest(ps, []string{}, 10, 10, ""))
+	fmt.Println(AssembleRequest(ps, []string{}, 10, 10, -1, ""))
 	CleanupProcesses(ps)
 }
 
 func TestAssembleRequestCPUs(t *testing.T) {
-	fmt.Println(AssembleRequest([]*os.Process{}, []string{"1-2"}, 10, 10, ""))
+	fmt.Println(AssembleRequest([]*os.Process{}, []string{"1-2"}, 10, 10, -1, ""))
 }
 
 func TestFormatByKey(t *testing.T) {

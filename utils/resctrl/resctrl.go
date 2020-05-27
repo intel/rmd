@@ -83,19 +83,27 @@ type CacheCos struct {
 	Mask string
 }
 
+// MbaCos is the COS of a cache
+type MbaCos struct {
+	ID  uint8
+	Mba uint32
+}
+
 // ResAssociation is the resource group in resctrl
 // TODO  need to paser the tag for field setting.
 type ResAssociation struct {
-	Tasks    []string
-	CPUs     string
-	Schemata map[string][]CacheCos
+	Tasks         []string
+	CPUs          string
+	CacheSchemata map[string][]CacheCos
+	MbaSchemata   map[string][]MbaCos
 }
 
 // NewResAssociation gives new empty ResAssociation
 func NewResAssociation() *ResAssociation {
 	ra := &ResAssociation{}
 	ra.Tasks = []string{}
-	ra.Schemata = make(map[string][]CacheCos)
+	ra.CacheSchemata = make(map[string][]CacheCos)
+	ra.MbaSchemata = make(map[string][]MbaCos)
 	return ra
 }
 
@@ -113,7 +121,7 @@ func parserResAssociation(basepath string, ignore []string, ps map[string]*ResAs
 		case "Schemata":
 			strs := strings.Split(string(val), "\n")
 			if len(strs) > 1 {
-				res.Schemata = make(map[string][]CacheCos)
+				res.CacheSchemata = make(map[string][]CacheCos)
 			}
 			for _, data := range strs {
 				datas := strings.SplitN(data, ":", 2)
@@ -124,8 +132,8 @@ func parserResAssociation(basepath string, ignore []string, ps map[string]*ResAs
 				if key == "" {
 					return nil
 				}
-				if _, ok := res.Schemata[key]; !ok {
-					res.Schemata[key] = make([]CacheCos, 0, 10)
+				if _, ok := res.CacheSchemata[key]; !ok {
+					res.CacheSchemata[key] = make([]CacheCos, 0, 10)
 				}
 
 				coses := strings.Split(datas[1], ";")
@@ -133,7 +141,7 @@ func parserResAssociation(basepath string, ignore []string, ps map[string]*ResAs
 					infos := strings.SplitN(cos, "=", 2)
 					id, _ := strconv.ParseUint(infos[0], 10, 8)
 					cacheCos := &CacheCos{uint8(id), infos[1]}
-					res.Schemata[key] = append(res.Schemata[key], *cacheCos)
+					res.CacheSchemata[key] = append(res.CacheSchemata[key], *cacheCos)
 				}
 
 			}

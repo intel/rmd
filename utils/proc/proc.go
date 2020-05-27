@@ -105,6 +105,11 @@ var IsMbaAvailable = func() (bool, error) {
 	return parseCPUInfoFile("mba")
 }
 
+// IsL3CatAvailable returns L3 CAT feature available or not
+var IsL3CatAvailable = func() (bool, error) {
+	return parseCPUInfoFile("cat_l3")
+}
+
 // we can use shell command: "mount -l -t resctrl"
 var findMountDir = func(mountdir string) (string, error) {
 	f, err := os.Open(MountInfoPath)

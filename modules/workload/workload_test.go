@@ -39,27 +39,27 @@ func TestGetCacheIDs(t *testing.T) {
 
 	cpubitmap := "3"
 
-	cacheIDs := getCacheIDs([]string{}, cpubitmap, cacheinfos, 8)
-	if len(cacheIDs) != 1 && cacheIDs[0] != 0 {
-		t.Errorf("cache_ids should be [0], but we get %v", cacheIDs)
+	socketIDs := getSocketIDs([]string{}, cpubitmap, cacheinfos, 8)
+	if len(socketIDs) != 1 && socketIDs[0] != 0 {
+		t.Errorf("cache_ids should be [0], but we get %v", socketIDs)
 	}
 
 	cpubitmap = "1f"
-	cacheIDs = getCacheIDs([]string{}, cpubitmap, cacheinfos, 8)
-	if len(cacheIDs) != 2 {
-		t.Errorf("cache_ids should be [0, 1], but we get %v", cacheIDs)
+	socketIDs = getSocketIDs([]string{}, cpubitmap, cacheinfos, 8)
+	if len(socketIDs) != 2 {
+		t.Errorf("cache_ids should be [0, 1], but we get %v", socketIDs)
 	}
 
 	cpubitmap = "10"
-	cacheIDs = getCacheIDs([]string{}, cpubitmap, cacheinfos, 8)
-	if len(cacheIDs) != 1 && cacheIDs[0] != 1 {
-		t.Errorf("cache_ids should be [1], but we get %v", cacheIDs)
+	socketIDs = getSocketIDs([]string{}, cpubitmap, cacheinfos, 8)
+	if len(socketIDs) != 1 && socketIDs[0] != 1 {
+		t.Errorf("cache_ids should be [1], but we get %v", socketIDs)
 	}
 
 	cpubitmap = "f00"
-	cacheIDs = getCacheIDs([]string{}, cpubitmap, cacheinfos, 8)
-	if len(cacheIDs) != 0 {
-		t.Errorf("cache_ids should be [], but we get %v", cacheIDs)
+	socketIDs = getSocketIDs([]string{}, cpubitmap, cacheinfos, 8)
+	if len(socketIDs) != 0 {
+		t.Errorf("cache_ids should be [], but we get %v", socketIDs)
 	}
 
 }
@@ -76,6 +76,7 @@ func TestValidateWorkLoad(t *testing.T) {
 			subs := StubFunc(&proc.ListProcesses, map[string]proc.Process{"1": proc.Process{Pid: 1, CmdLine: "cmdline"}})
 			defer subs.Reset()
 			var cache uint32 = 1
+			var mba uint32 = 50
 			wl := &tw.RDTWorkLoad{}
 			err := Validate(wl)
 			c.So(err, ShouldNotBeNil)
@@ -93,12 +94,13 @@ func TestValidateWorkLoad(t *testing.T) {
 			})
 
 			// Test for Workload with Cache params provided
-			wl.Cache.Max = &cache
+			wl.Rdt.Cache.Max = &cache
 			c.Convey("Validate with MaxCache is not nil but MinCache is nil", func(c C) {
 				err := Validate(wl)
 				c.So(err, ShouldNotBeNil)
 
-				wl.Cache.Min = &cache
+				wl.Rdt.Cache.Min = &cache
+				wl.Rdt.Mba.Percentage = &mba
 				c.Convey("Validate with MaxCache & MinCache are not nil", func(c C) {
 
 					err := Validate(wl)
@@ -180,8 +182,8 @@ func Test_fillWorkloadByPolicy(t *testing.T) {
 	correctWorkload.Status = "Successful"
 	correctWorkload.CosName = "3-guarantee"
 	correctWorkload.Policy = "gold"
-	correctWorkload.Cache.Max = &origCache
-	correctWorkload.Cache.Min = &origCache
+	correctWorkload.Rdt.Cache.Max = &origCache
+	correctWorkload.Rdt.Cache.Min = &origCache
 	correctWorkload.PState.Ratio = &origpStateRatio
 	correctWorkload.PState.Monitoring = &pStateMonitoring
 
@@ -190,8 +192,8 @@ func Test_fillWorkloadByPolicy(t *testing.T) {
 	noPolicyWorkload.Origin = "REST"
 	noPolicyWorkload.Status = "Successful"
 	noPolicyWorkload.CosName = "3-guarantee"
-	noPolicyWorkload.Cache.Max = &origCache
-	noPolicyWorkload.Cache.Min = &origCache
+	noPolicyWorkload.Rdt.Cache.Max = &origCache
+	noPolicyWorkload.Rdt.Cache.Min = &origCache
 	noPolicyWorkload.PState.Ratio = &origpStateRatio
 	noPolicyWorkload.PState.Monitoring = &pStateMonitoring
 
@@ -560,8 +562,8 @@ func Test_populateEnforceRequest(t *testing.T) {
 	wMonitoringOn.CoreIDs = []string{"3"}
 	wMonitoringOn.Origin = "REST"
 	wMonitoringOn.Status = "None"
-	wMonitoringOn.Cache.Max = &origCache
-	wMonitoringOn.Cache.Min = &origCache
+	wMonitoringOn.Rdt.Cache.Max = &origCache
+	wMonitoringOn.Rdt.Cache.Min = &origCache
 	wMonitoringOn.PState.Ratio = &origpStateRatio
 	wMonitoringOn.PState.Monitoring = &pStateMonitoringOn
 
@@ -569,8 +571,8 @@ func Test_populateEnforceRequest(t *testing.T) {
 	wMonitoringOff.CoreIDs = []string{"3"}
 	wMonitoringOff.Origin = "REST"
 	wMonitoringOff.Status = "None"
-	wMonitoringOff.Cache.Max = &origCache
-	wMonitoringOff.Cache.Min = &origCache
+	wMonitoringOff.Rdt.Cache.Max = &origCache
+	wMonitoringOff.Rdt.Cache.Min = &origCache
 	wMonitoringOff.PState.Ratio = &origpStateRatio
 	wMonitoringOff.PState.Monitoring = &pStateMonitoringOff
 
@@ -579,8 +581,8 @@ func Test_populateEnforceRequest(t *testing.T) {
 	wPolicyExists.Origin = "REST"
 	wPolicyExists.Status = "None"
 	wPolicyExists.Policy = "silver"
-	wPolicyExists.Cache.Max = &origCache
-	wPolicyExists.Cache.Min = &origCache
+	wPolicyExists.Rdt.Cache.Max = &origCache
+	wPolicyExists.Rdt.Cache.Min = &origCache
 	wPolicyExists.PState.Ratio = &origpStateRatio
 	wPolicyExists.PState.Monitoring = &pStateMonitoringOn
 
@@ -589,8 +591,8 @@ func Test_populateEnforceRequest(t *testing.T) {
 	wWrongPolicyExists.Origin = "REST"
 	wWrongPolicyExists.Status = "None"
 	wWrongPolicyExists.Policy = "fakePolicyName"
-	wWrongPolicyExists.Cache.Max = &origCache
-	wWrongPolicyExists.Cache.Min = &origCache
+	wWrongPolicyExists.Rdt.Cache.Max = &origCache
+	wWrongPolicyExists.Rdt.Cache.Min = &origCache
 	wWrongPolicyExists.PState.Ratio = &origpStateRatio
 	wWrongPolicyExists.PState.Monitoring = &pStateMonitoringOn
 
@@ -622,34 +624,47 @@ func Test_populateEnforceRequest(t *testing.T) {
 func Test_validate(t *testing.T) {
 	// the same value for min and max cache
 	var origCache uint32 = 2
+	var origMba uint32 = 50
+	var wrongMbaValue uint32 = 130
+	// Check if MBA is supported in the host. Error check not required
+	isMbaSupported, _ = proc.IsMbaAvailable()
 
 	w := tw.RDTWorkLoad{}
 	w.CoreIDs = []string{"3"}
 	w.Origin = "REST"
 	w.Status = "None"
-	w.Cache.Max = &origCache
-	w.Cache.Min = &origCache
+	w.Rdt.Cache.Max = &origCache
+	w.Rdt.Cache.Min = &origCache
+	w.Rdt.Mba.Percentage = &origMba
+
+	wWrongMbaValue := tw.RDTWorkLoad{}
+	wWrongMbaValue.CoreIDs = []string{"4"}
+	wWrongMbaValue.Origin = "REST"
+	wWrongMbaValue.Status = "None"
+	wWrongMbaValue.Rdt.Cache.Max = &origCache
+	wWrongMbaValue.Rdt.Cache.Min = &origCache
+	wWrongMbaValue.Rdt.Mba.Percentage = &wrongMbaValue
 
 	wLackOfCacheID := tw.RDTWorkLoad{}
 	wLackOfCacheID.Origin = "REST"
 	wLackOfCacheID.Status = "None"
-	wLackOfCacheID.Cache.Max = &origCache
-	wLackOfCacheID.Cache.Min = &origCache
+	wLackOfCacheID.Rdt.Cache.Max = &origCache
+	wLackOfCacheID.Rdt.Cache.Min = &origCache
 
 	wPolicyExists := tw.RDTWorkLoad{}
 	wPolicyExists.CoreIDs = []string{"3"}
 	wPolicyExists.Origin = "REST"
 	wPolicyExists.Status = "None"
 	wPolicyExists.Policy = "silver"
-	wPolicyExists.Cache.Max = &origCache
-	wPolicyExists.Cache.Min = &origCache
+	wPolicyExists.Rdt.Cache.Max = &origCache
+	wPolicyExists.Rdt.Cache.Min = &origCache
 
 	wNilAsMxCache := tw.RDTWorkLoad{}
 	w.CoreIDs = []string{"3"}
 	wNilAsMxCache.Origin = "REST"
 	wNilAsMxCache.Status = "None"
-	wNilAsMxCache.Cache.Max = nil
-	wNilAsMxCache.Cache.Min = &origCache
+	wNilAsMxCache.Rdt.Cache.Max = nil
+	wNilAsMxCache.Rdt.Cache.Min = &origCache
 
 	type args struct {
 		w *tw.RDTWorkLoad
@@ -659,7 +674,8 @@ func Test_validate(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"Correct case no PState", args{w: &w}, false},
+		{"Correct case no PState", args{w: &w}, !isMbaSupported},
+		{"Incorrect Mba Value provided", args{w: &wWrongMbaValue}, true},
 		{"Lack of cache ID disabled", args{w: &wLackOfCacheID}, true},
 		{"Policy silver case", args{w: &wPolicyExists}, false},
 		{"Nil max cache", args{w: &wNilAsMxCache}, true},

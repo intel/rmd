@@ -13,7 +13,7 @@ func TestGetResAssociation(t *testing.T) {
 		if name == "CG1" {
 			fmt.Println(name)
 			fmt.Println(res)
-			fmt.Println(res.Schemata["L3CODE"])
+			fmt.Println(res.CacheSchemata["L3CODE"])
 		}
 	}
 }

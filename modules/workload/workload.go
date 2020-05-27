@@ -28,10 +28,17 @@ import (
 	util "github.com/intel/rmd/utils"
 )
 
+const (
+	defaultMBAPercentage uint32 = 100
+)
+
 var l sync.Mutex
 
 // database for storing all active workloads
 var workloadDatabase db.DB
+
+// Flag to check if MBA and L3 CAT is supported
+var isMbaSupported, isL3CATSupported bool
 
 // reusable function for filling workload with policy-based params
 func fillWorkloadByPolicy(wrkld *wltypes.RDTWorkLoad) error {
@@ -51,17 +58,17 @@ func fillWorkloadByPolicy(wrkld *wltypes.RDTWorkLoad) error {
 	// cache allocation is not mandatory so use param if they exists
 	maxWays, err := strconv.Atoi(policy["cache"]["max"])
 	if err == nil {
-		wrkld.Cache.Max = new(uint32)
-		*wrkld.Cache.Max = uint32(maxWays)
+		wrkld.Rdt.Cache.Max = new(uint32)
+		*wrkld.Rdt.Cache.Max = uint32(maxWays)
 	}
 
 	minWays, err := strconv.Atoi(policy["cache"]["min"])
 	if err == nil {
-		wrkld.Cache.Min = new(uint32)
-		*wrkld.Cache.Min = uint32(minWays)
+		wrkld.Rdt.Cache.Min = new(uint32)
+		*wrkld.Rdt.Cache.Min = uint32(minWays)
 	}
 
-	if (wrkld.Cache.Min != nil && wrkld.Cache.Max == nil) || (wrkld.Cache.Min == nil && wrkld.Cache.Max != nil) {
+	if (wrkld.Rdt.Cache.Min != nil && wrkld.Rdt.Cache.Max == nil) || (wrkld.Rdt.Cache.Min == nil && wrkld.Rdt.Cache.Max != nil) {
 		return fmt.Errorf("Invalid policy - exactly one *Cache param defined")
 	}
 
@@ -103,9 +110,40 @@ func validate(w *wltypes.RDTWorkLoad) error {
 
 	if w.Policy == "" {
 		// there have to be both cache values or none of them
-		if (w.Cache.Max == nil && w.Cache.Min != nil) || (w.Cache.Max != nil && w.Cache.Min == nil) {
+		if (w.Rdt.Cache.Max == nil && w.Rdt.Cache.Min != nil) || (w.Rdt.Cache.Max != nil && w.Rdt.Cache.Min == nil) {
 			return fmt.Errorf("Need to provide both *_cache or none of them")
 		}
+		// If MBA values are provided :
+		// 1. Check if its a Cache guaranteed request
+		// 2. Check if MBA value is range of 1 to 100
+		// 3. If any of the above fails then return error
+		if w.Rdt.Mba.Percentage != nil {
+			if w.Rdt.Cache.Max != nil && w.Rdt.Cache.Min != nil &&
+				((*w.Rdt.Cache.Max != *w.Rdt.Cache.Min && *w.Rdt.Mba.Percentage != 100) ||
+					(*w.Rdt.Cache.Min == 0 && *w.Rdt.Cache.Max == 0 && *w.Rdt.Mba.Percentage != 100)) {
+				return fmt.Errorf("MBA only supported for Guaranteed Request and not for BestEffort and Shared")
+			}
+			if *w.Rdt.Mba.Percentage > 100 || *w.Rdt.Mba.Percentage <= 0 {
+				return fmt.Errorf("MBA values in percentage range from 1 to 100")
+			}
+		}
+
+		if isL3CATSupported && isMbaSupported {
+			if w.Rdt.Cache.Max == nil && w.Rdt.Cache.Min == nil && w.Rdt.Mba.Percentage != nil {
+				return fmt.Errorf("Need to provide both cache and mba for better performance")
+			}
+		} else {
+			if isL3CATSupported {
+				if w.Rdt.Mba.Percentage != nil {
+					return fmt.Errorf("This machine supports only cache and not MBA")
+				}
+			} else {
+				if w.Rdt.Cache.Max != nil && w.Rdt.Cache.Min != nil {
+					return fmt.Errorf("This machine supports only MBA and not cache")
+				}
+			}
+		}
+
 		if w.PState.Ratio != nil || w.PState.Monitoring != nil {
 			// when P-State related setting forced check if P-State plugin enabled
 			if pstate.Instance == nil {
@@ -148,7 +186,7 @@ func validate(w *wltypes.RDTWorkLoad) error {
 	// - policy (checked above)
 	// - Cache.Max && Cache.min
 	// - PState.Ratio || PState.Monitoring
-	if w.Cache.Max != nil && w.Cache.Min != nil {
+	if w.Rdt.Cache.Max != nil && w.Rdt.Cache.Min != nil {
 		// Cache params defined
 		return nil
 	}
@@ -157,11 +195,16 @@ func validate(w *wltypes.RDTWorkLoad) error {
 		return nil
 	}
 
+	if w.Rdt.Mba.Percentage != nil {
+		// MBA params defined
+		return nil
+	}
+
 	// if reached this point then something went wrong
-	return fmt.Errorf("No Cache neither PState params in workload")
+	return fmt.Errorf("No Cache/MBA/PState params in workload")
 }
 
-func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
+func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *wltypes.RDTEnforce) error {
 
 	resaall := proxyclient.GetResAssociation()
 
@@ -178,8 +221,8 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
 
 	// cache alocation settings begin (only if enabled in workload request)
 	for k, v := range av {
-		cacheID, _ := strconv.Atoi(k)
-		if !inCacheList(uint32(cacheID), er.CacheIDs) && er.Type != cache.Shared {
+		socketID, _ := strconv.Atoi(k)
+		if !inCacheList(uint32(socketID), er.SocketIDs) && er.Type != cache.Shared {
 			candidate[k], _ = libutil.NewBitmap(
 				cache.GetCosInfo().CbmMaskLen,
 				cache.GetCosInfo().CbmMask)
@@ -211,12 +254,12 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
 						"Not enough cache left on cache_id %s", k)
 				}
 				// Try to Shrink workload in besteffort pool
-				cand, changed, err := shrinkBEPool(resaall, reserved[cache.Besteffort].Schemata[k], cacheID, er.MinWays)
+				cand, changed, err := shrinkBEPool(resaall, reserved[cache.Besteffort].Schemata[k], socketID, er.MinWays)
 				if err != nil {
 					return rmderror.AppErrorf(http.StatusInternalServerError,
 						"Errors while try to shrink cache ways on cache_id %s", k)
 				}
-				log.Printf("Shriking cache ways in besteffort pool, candidate schemata for cache id  %d is %s", cacheID, cand.ToString())
+				log.Printf("Shriking cache ways in besteffort pool, candidate schemata for cache id  %d is %s", socketID, cand.ToString())
 				candidate[k] = cand
 				// Merge changed association to a map, we will commit this map
 				// later
@@ -241,24 +284,99 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
 				"Not enough cache left on cache_id %s", k)
 		}
 	}
+	// populating cache params in rdtenforce structure with necessar values
+	rdtenforce.Resall = resaall
+	rdtenforce.TargetLev = targetLev
+	rdtenforce.CandidateCache = candidate
+	rdtenforce.ChangedRes = changedRes
+	rdtenforce.Reserved = reserved
+	rdtenforce.AvailableSchemata = av
+
+	return nil
+}
+
+// This function populates the rdtenforce structure with necessary MBA params
+func enforceMba(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *wltypes.RDTEnforce) error {
+	var availableSchemata map[string]*libutil.Bitmap
+	var err error
+	// If cache params are received as part of the request reuse the calculation in rdtenforce
+	// If not then calculate
+	if er.UseCache {
+		availableSchemata = rdtenforce.AvailableSchemata
+	} else {
+		resaall := proxyclient.GetResAssociation()
+		targetLev := strconv.FormatUint(uint64(cache.GetLLC()), 10)
+		availableSchemata, err = cache.GetAvailableCacheSchemata(resaall, []string{"infra", "."}, "none", "L"+targetLev)
+		if err != nil {
+			return rmderror.AppErrorf(http.StatusInternalServerError,
+				"Unable to read cache schemata; %s", err.Error())
+		}
+	}
+	rdtenforce.CandidateMba = make(map[string]*uint32, len(availableSchemata))
+	rdtenforce.TargetMba = "MB"
+	defaultMBAValue := defaultMBAPercentage
+	for k := range availableSchemata {
+		socketID, ok := strconv.Atoi(k)
+		if ok != nil {
+			return ok
+		}
+		// Check the socket to which the MBA params need to be modified
+		if inCacheList(uint32(socketID), er.SocketIDs) {
+			rdtenforce.CandidateMba[k] = w.Rdt.Mba.Percentage
+		} else {
+			rdtenforce.CandidateMba[k] = &defaultMBAValue
+		}
+	}
+	return nil
+}
+
+func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *wltypes.RDTEnforce) error {
 
 	var resAss *resctrl.ResAssociation
 	var grpName string
-
-	if er.Type == cache.Shared {
-		grpName = reserved[cache.Shared].Name
-		if res, ok := resaall[grpName]; !ok {
-			resAss = newResAss(candidate, targetLev)
+	var err error
+	// Read all the rdtenforce cache and MBA params
+	reserved := rdtenforce.Reserved
+	targetLev := rdtenforce.TargetLev
+	targetMba := rdtenforce.TargetMba
+	resaall := rdtenforce.Resall
+	candidateCache := rdtenforce.CandidateCache
+	candidateMba := rdtenforce.CandidateMba
+	changedRes := rdtenforce.ChangedRes
+	// If cache is used
+	if er.UseCache {
+		if er.Type == cache.Shared {
+			grpName = reserved[cache.Shared].Name
+			if res, ok := resaall[grpName]; !ok {
+				resAss = newResAss(candidateCache, targetLev)
+			} else {
+				resAss = res
+			}
 		} else {
-			resAss = res
+			resAss = newResAss(candidateCache, targetLev)
+			if len(w.TaskIDs) > 0 {
+				grpName = strings.Join(w.TaskIDs, "_") + "-" + er.Type
+			} else if len(w.CoreIDs) > 0 {
+				grpName = strings.Join(w.CoreIDs, "_") + "-" + er.Type
+			}
 		}
-	} else {
-		resAss = newResAss(candidate, targetLev)
-		if len(w.TaskIDs) > 0 {
-			grpName = strings.Join(w.TaskIDs, "_") + "-" + er.Type
-		} else if len(w.CoreIDs) > 0 {
-			grpName = strings.Join(w.CoreIDs, "_") + "-" + er.Type
+	}
+	// If Mba is used
+	if er.UseMba {
+		if er.Type == cache.Shared {
+			grpName = reserved[cache.Shared].Name
+		} else {
+			if er.Type == cache.Besteffort {
+				grpName = strings.Join(w.TaskIDs, "_") + "-" + er.Type
+			} else {
+				if len(w.TaskIDs) > 0 {
+					grpName = strings.Join(w.TaskIDs, "_") + "-" + "guarantee"
+				} else if len(w.CoreIDs) > 0 {
+					grpName = strings.Join(w.CoreIDs, "_") + "-" + "guarantee"
+				}
+			}
 		}
+		resAss = newResAssForMba(resAss, candidateMba, targetMba)
 	}
 	// cache alocation settings end
 
@@ -273,7 +391,6 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
 		}
 	}
 	resAss.Tasks = append(resAss.Tasks, w.TaskIDs...)
-
 	if err = proxyclient.Commit(resAss, grpName); err != nil {
 		log.Errorf("Error while try to commit resource group for workload %s, group name %s", w.ID, grpName)
 		return rmderror.NewAppError(http.StatusInternalServerError,
@@ -316,14 +433,25 @@ func Enforce(w *wltypes.RDTWorkLoad) error {
 	defer l.Unlock()
 
 	er := &wltypes.EnforceRequest{}
+	rdtenforce := &wltypes.RDTEnforce{}
 	if err := populateEnforceRequest(er, w); err != nil {
 		return err
 	}
-
+	// Use cache when params received as part of request
 	if er.UseCache {
-		if err := enforceCache(w, er); err != nil {
+		if err := enforceCache(w, er, rdtenforce); err != nil {
 			return err
 		}
+	}
+	// Use Mba when params received as part of request
+	if er.UseMba {
+		if err := enforceMba(w, er, rdtenforce); err != nil {
+			return err
+		}
+	}
+	// Enforce the Cache and MBA params into the resctrl
+	if err := enforceRDT(w, er, rdtenforce); err != nil {
+		return err
 	}
 
 	// p-state settings begin
@@ -443,29 +571,45 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 		if len(w.Policy) > 0 {
 			fillWorkloadByPolicy(w)
 		}
-		if patched.Cache.Max != nil {
+		if patched.Rdt.Cache.Max != nil {
 			// param manually defined - drop policy information
 			w.Policy = ""
-			if w.Cache.Max == nil {
-				w.Cache.Max = patched.Cache.Max
+			if w.Rdt.Cache.Max == nil {
+				w.Rdt.Cache.Max = patched.Rdt.Cache.Max
 				reEnforce = true
 			}
-			if w.Cache.Max != nil && *w.Cache.Max != *patched.Cache.Max {
-				*w.Cache.Max = *patched.Cache.Max
+			if w.Rdt.Cache.Max != nil && *w.Rdt.Cache.Max != *patched.Rdt.Cache.Max {
+				*w.Rdt.Cache.Max = *patched.Rdt.Cache.Max
 				reEnforce = true
 			}
 		}
 
-		if patched.Cache.Min != nil {
+		if patched.Rdt.Cache.Min != nil {
 			// param manually defined - drop policy information
 			w.Policy = ""
-			if w.Cache.Min == nil {
-				w.Cache.Min = patched.Cache.Min
+			if w.Rdt.Cache.Min == nil {
+				w.Rdt.Cache.Min = patched.Rdt.Cache.Min
 				reEnforce = true
 			}
-			if w.Cache.Min != nil && *w.Cache.Min != *patched.Cache.Min {
-				*w.Cache.Min = *patched.Cache.Min
+			if w.Rdt.Cache.Min != nil && *w.Rdt.Cache.Min != *patched.Rdt.Cache.Min {
+				*w.Rdt.Cache.Min = *patched.Rdt.Cache.Min
 				reEnforce = true
+			}
+		}
+
+		if patched.Rdt.Mba.Percentage != nil {
+			if *patched.Rdt.Mba.Percentage > 0 && *patched.Rdt.Mba.Percentage <= 100 {
+				w.Policy = ""
+				if w.Rdt.Mba.Percentage == nil {
+					w.Rdt.Mba.Percentage = patched.Rdt.Mba.Percentage
+					reEnforce = true
+				}
+				if w.Rdt.Mba.Percentage != nil && *w.Rdt.Mba.Percentage != *patched.Rdt.Mba.Percentage {
+					*w.Rdt.Mba.Percentage = *patched.Rdt.Mba.Percentage
+					reEnforce = true
+				}
+			} else {
+				return rmderror.NewAppError(http.StatusBadRequest, "MBA values range only from 1 to 100")
 			}
 		}
 
@@ -559,8 +703,8 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 	return nil
 }
 
-func getCacheIDs(taskids []string, cpubitmap string, cacheinfos *cache.Infos, cpunum int) []uint32 {
-	var CacheIDs []uint32
+func getSocketIDs(taskids []string, cpubitmap string, cacheinfos *cache.Infos, cpunum int) []uint32 {
+	var SocketIDs []uint32
 	cpubm, _ := libutil.NewBitmap(cpunum, cpubitmap)
 
 	for _, t := range taskids {
@@ -578,24 +722,24 @@ func getCacheIDs(taskids []string, cpubitmap string, cacheinfos *cache.Infos, cp
 		// Okay, NewBitmap only support string list if we using human style
 		bm, _ := libutil.NewBitmap(cpunum, strings.Split(c.ShareCPUList, "\n"))
 		if !cpubm.And(bm).IsEmpty() {
-			CacheIDs = append(CacheIDs, c.ID)
+			SocketIDs = append(SocketIDs, c.ID)
 		}
 	}
-	return CacheIDs
+	return SocketIDs
 }
 
-func inCacheList(cache uint32, cacheList []uint32) bool {
+func inCacheList(socket uint32, socketList []uint32) bool {
 	// TODO: if this case, workload has taskids.
 	// Later we need to have abilitity to discover if has taskset
 	// to pin this taskids on a cpuset or not, for now we allocate
 	// cache on all cache.
 	// FIXME: this shouldn't happen here actually
-	if len(cacheList) == 0 {
+	if len(socketList) == 0 {
 		return true
 	}
 
-	for _, c := range cacheList {
-		if cache == c {
+	for _, c := range socketList {
+		if socket == c {
 			return true
 		}
 	}
@@ -624,19 +768,46 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 			"Unable to get Total CPU numbers on Host")
 	}
 
-	req.CacheIDs = getCacheIDs(w.TaskIDs, cpubitstr, cacheinfo, cpunum)
+	req.SocketIDs = getSocketIDs(w.TaskIDs, cpubitstr, cacheinfo, cpunum)
 
 	// if policy not defined in workload then use values from manually defined params
 	// (assuming RDTWorkLoad object has been validated before and only some safe-checks needed)
 	if len(w.Policy) == 0 {
-		if w.Cache.Min != nil {
-			req.MinWays = *w.Cache.Min
+		if w.Rdt.Cache.Min != nil {
+			req.MinWays = *w.Rdt.Cache.Min
 		}
-		if w.Cache.Max != nil {
-			req.MaxWays = *w.Cache.Max
+		if w.Rdt.Cache.Max != nil {
+			req.MaxWays = *w.Rdt.Cache.Max
 		}
-		if w.Cache.Min != nil && w.Cache.Max != nil {
+		if w.Rdt.Cache.Min != nil && w.Rdt.Cache.Max != nil {
 			req.UseCache = true
+		}
+		// Check if MBA is available and enabled in the host
+		// MBA to be used only for Guaranteed Cache Request
+		if w.Rdt.Mba.Percentage != nil {
+			if !isMbaSupported {
+				req.UseMba = false
+				log.Error("Mba is not supported in this machine")
+				return rmderror.NewAppError(http.StatusInternalServerError,
+					"MBA is not supported in this machine")
+			}
+			if flag, _ := proc.IsEnableMba(); !flag {
+				req.UseMba = false
+				log.Error("Mba is not enabled. Enable Mba")
+				return rmderror.NewAppError(http.StatusInternalServerError,
+					"Please enable MBA in resctrl fs")
+			}
+			if (w.Rdt.Cache.Min == nil && w.Rdt.Cache.Max == nil) ||
+				(req.UseCache && (*w.Rdt.Cache.Max == *w.Rdt.Cache.Min && *w.Rdt.Cache.Max > 0 ||
+					*w.Rdt.Cache.Max != *w.Rdt.Cache.Min && *w.Rdt.Mba.Percentage == 100 ||
+					*w.Rdt.Cache.Max == 0 && *w.Rdt.Cache.Min == 0 && *w.Rdt.Mba.Percentage == 100)) {
+				req.UseMba = true
+			} else {
+				req.UseMba = false
+				log.Error("Mba can be used only guaranteed Cache Request")
+				return rmderror.NewAppError(http.StatusInternalServerError,
+					"MBA is only supported for Guarantee Cache Request")
+			}
 		}
 		if w.PState.Ratio != nil {
 			req.PState = true
@@ -698,6 +869,11 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 		}
 	}
 
+	if req.MinWays > req.MaxWays {
+		return rmderror.NewAppError(http.StatusInternalServerError,
+			"Min cache value cannot be greater than max cache value")
+	}
+
 	if req.UseCache {
 		var err error
 		req.Type, err = cache.GetCachePoolName(req.MaxWays, req.MinWays)
@@ -713,18 +889,31 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 
 func newResAss(r map[string]*libutil.Bitmap, level string) *resctrl.ResAssociation {
 	newResAss := resctrl.ResAssociation{}
-	newResAss.Schemata = make(map[string][]resctrl.CacheCos)
+	newResAss.CacheSchemata = make(map[string][]resctrl.CacheCos)
 
 	targetLev := "L" + level
 
 	for k, v := range r {
 		cacheID, _ := strconv.Atoi(k)
 		newcos := resctrl.CacheCos{ID: uint8(cacheID), Mask: v.ToString()}
-		newResAss.Schemata[targetLev] = append(newResAss.Schemata[targetLev], newcos)
+		newResAss.CacheSchemata[targetLev] = append(newResAss.CacheSchemata[targetLev], newcos)
 
 		log.Debugf("Newly created Mask for Cache %s is %s", k, newcos.Mask)
 	}
 	return &newResAss
+}
+
+func newResAssForMba(resAss *resctrl.ResAssociation, candidate map[string]*uint32, targetMba string) *resctrl.ResAssociation {
+	if resAss == nil {
+		resAss = &resctrl.ResAssociation{}
+	}
+	resAss.MbaSchemata = make(map[string][]resctrl.MbaCos)
+	for k, v := range candidate {
+		MbaID, _ := strconv.Atoi(k)
+		newcos := resctrl.MbaCos{ID: uint8(MbaID), Mba: *v}
+		resAss.MbaSchemata[targetMba] = append(resAss.MbaSchemata[targetMba], newcos)
+	}
+	return resAss
 }
 
 // shrinkBEPool requres to provide cacheid of the request, MinCache ways (
@@ -753,13 +942,13 @@ func shrinkBEPool(resaall map[string]*resctrl.ResAssociation,
 				return nil, besteffortRes, fmt.Errorf(
 					"Internal error, can not find exsting workload for resource group name %s", name)
 			}
-			cosSchemata, _ := cache.BitmapsCacheWrapper(v.Schemata["L"+targetLev][cacheID].Mask)
+			cosSchemata, _ := cache.BitmapsCacheWrapper(v.CacheSchemata["L"+targetLev][cacheID].Mask)
 			// TODO: need find a better way to reduce the cache way fragments
 			// as currently we are using map to keep resctrl group, it's non-order
 			// so it's little hard to get which resctrl group next to which.
 			// just using max - min slot to shrink the cache. Hence, the result
 			// would only shrink one of the resource group to min one
-			minSchemata := cosSchemata.GetConnectiveBits(*ws[0].Cache.Min, 0, false)
+			minSchemata := cosSchemata.GetConnectiveBits(*ws[0].Rdt.Cache.Min, 0, false)
 			availableSchemata = availableSchemata.Axor(minSchemata)
 		}
 	}
@@ -770,11 +959,11 @@ func shrinkBEPool(resaall map[string]*resctrl.ResAssociation,
 	// loop besteffortRes to find which association need to be changed.
 	changedRes := make(map[string]*resctrl.ResAssociation)
 	for name, v := range besteffortRes {
-		cosSchemata, _ := cache.BitmapsCacheWrapper(v.Schemata["L"+targetLev][cacheID].Mask)
+		cosSchemata, _ := cache.BitmapsCacheWrapper(v.CacheSchemata["L"+targetLev][cacheID].Mask)
 		tmpSchemataStr := cosSchemata.Axor(candidateSchemata).ToString()
 		if tmpSchemataStr != cosSchemata.ToString() {
 			// Changing pointers, the change will be reflact to the origin one
-			v.Schemata["L"+targetLev][cacheID].Mask = tmpSchemataStr
+			v.CacheSchemata["L"+targetLev][cacheID].Mask = tmpSchemataStr
 			changedRes[name] = v
 		}
 	}
@@ -871,7 +1060,6 @@ func updateInDB(w *wltypes.RDTWorkLoad) error {
 
 // Validate the request workload object is validated.
 func Validate(w *wltypes.RDTWorkLoad) error {
-
 	err := validate(w)
 	if err != nil {
 		log.Errorf("Failed to validate workload due to reason: %s", err.Error())
@@ -883,7 +1071,6 @@ func Validate(w *wltypes.RDTWorkLoad) error {
 		log.Errorf("Failed to validate workload in database due to reason: %s", err.Error())
 		return err
 	}
-
 	return nil
 }
 
@@ -913,6 +1100,14 @@ func Init() error {
 		log.Error("Cannot create database")
 	} else {
 		workloadDatabase = temp
+	}
+	isMbaSupported, err = proc.IsMbaAvailable()
+	if err != nil {
+		return err
+	}
+	isL3CATSupported, err = proc.IsL3CatAvailable()
+	if err != nil {
+		return err
 	}
 	return err
 }

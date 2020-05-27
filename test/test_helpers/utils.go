@@ -49,13 +49,21 @@ func CleanupProcesses(ps []*os.Process) {
 }
 
 // AssembleRequest assemble the request body by given process id and max, min cache or policy
-func AssembleRequest(processes []*os.Process, coreIds []string, maxCache, minCache int, policy string) map[string]interface{} {
+func AssembleRequest(processes []*os.Process, coreIds []string, maxCache, minCache int, mbaPercentage int, policy string) map[string]interface{} {
 	data := map[string]interface{}{}
 	if policy != "" {
 		data["policy"] = policy
 	} else {
 		params := map[string]int{"max": maxCache, "min": minCache}
-		data["cache"] = params
+		var params1 = map[string]int{}
+		if mbaPercentage != -1 {
+			params1 = map[string]int{"percentage": mbaPercentage}
+		}
+		if mbaPercentage != -1 {
+			data["rdt"] = map[string]interface{}{"cache": params, "mba": params1}
+		} else {
+			data["rdt"] = map[string]interface{}{"cache": params}
+		}
 	}
 
 	var taskIds []string

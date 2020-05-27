@@ -142,9 +142,12 @@ type SchemataTask struct {
 
 // Run to commit schemata
 func (t SchemataTask) Run() error {
-	if len(t.Schemata) > 0 {
+	var dataCache, dataMba, data string
+	dataCache = ""
+	dataMba = ""
+	if len(t.CacheSchemata) > 0 {
 		schemata := make([]string, 0, 10)
-		for k, v := range t.Schemata {
+		for k, v := range t.CacheSchemata {
 			str := make([]string, 0, 10)
 			// resctrl require we have strict cache id order
 			for cacheid := 0; cacheid < len(v); cacheid++ {
@@ -157,8 +160,33 @@ func (t SchemataTask) Run() error {
 			}
 			schemata = append(schemata, strings.Join([]string{k, strings.Join(str, ";")}, ":"))
 		}
-		data := strings.Join(schemata, "\n")
-		err := writeFile(t.Path, "schemata", data)
+		dataCache = strings.Join(schemata, "\n")
+	}
+	if len(t.MbaSchemata) > 0 {
+		schemataMba := make([]string, 0, 10)
+		for k, v := range t.MbaSchemata {
+			str := make([]string, 0, 10)
+			// resctrl require we have strict cache id order
+			for mbaid := 0; mbaid < len(v); mbaid++ {
+				for _, cos := range v {
+					if uint8(mbaid) == cos.ID {
+						str = append(str, fmt.Sprintf("%d=%s", cos.ID, fmt.Sprint(cos.Mba)))
+						break
+					}
+				}
+			}
+			schemataMba = append(schemataMba, strings.Join([]string{k, strings.Join(str, ";")}, ":"))
+		}
+		dataMba = strings.Join(schemataMba, "\n")
+	}
+	if dataCache != "" {
+		data += dataCache + "\n"
+	}
+	if dataMba != "" {
+		data += dataMba
+	}
+	err := writeFile(t.Path, "schemata", data)
+	if err != nil {
 		return err
 	}
 	return nil

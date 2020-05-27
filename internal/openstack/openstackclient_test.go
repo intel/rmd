@@ -604,16 +604,11 @@ func Test_getSwiftWorkloadPolicyByURL(t *testing.T) {
 	pStateRatio := 3.0
 	pStateMonitoring := "on"
 
-	testWorkload2 := &workload.RDTWorkLoad{
-		Cache: struct {
-			Max *uint32 `json:"max,omitempty"`
-			Min *uint32 `json:"min,omitempty"`
-		}{&cachesValue, &cachesValue},
-		PState: struct {
-			Ratio      *float64 `json:"ratio,omitempty"`
-			Monitoring *string  `json:"monitoring,omitempty"`
-		}{&pStateRatio, &pStateMonitoring},
-	}
+	testWorkload2 := &workload.RDTWorkLoad{}
+	testWorkload2.Rdt.Cache.Max = &cachesValue
+	testWorkload2.Rdt.Cache.Min = &cachesValue
+	testWorkload2.PState.Ratio = &pStateRatio
+	testWorkload2.PState.Monitoring = &pStateMonitoring
 
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()

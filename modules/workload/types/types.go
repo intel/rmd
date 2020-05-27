@@ -1,6 +1,10 @@
 package types
 
-import "github.com/intel/rmd/utils/resctrl"
+import (
+	"github.com/intel/rmd/modules/cache"
+	libutil "github.com/intel/rmd/utils/bitmap"
+	"github.com/intel/rmd/utils/resctrl"
+)
 
 const (
 	// Successful status
@@ -27,13 +31,20 @@ type RDTWorkLoad struct {
 	Status string `json:"status"`
 	// CosNamej
 	CosName string `json:"cos_name"`
-	// Cache module (RDT) related settings
-	Cache struct {
-		// Max Cache ways, use pointer to distinguish 0 value and empty value
-		Max *uint32 `json:"max,omitempty"`
-		// Min Cache ways, use pointer to distinguish 0 value and empty value
-		Min *uint32 `json:"min,omitempty"`
-	} `json:"cache,omitempty"`
+	// RDT module (RDT) related settings (Cache, MBA)
+	Rdt struct {
+		// Cache Settings
+		Cache struct {
+			// Max Cache ways, use pointer to distinguish 0 value and empty value
+			Max *uint32 `json:"max,omitempty"`
+			// Min Cache ways, use pointer to distinguish 0 value and empty value
+			Min *uint32 `json:"min,omitempty"`
+		} `json:"cache,omitempty"`
+		// MBA settings
+		Mba struct {
+			Percentage *uint32 `json:"percentage,omitempty"`
+		} `json:"mba,omitempty"`
+	} `json:"rdt,omitempty"`
 	// P-State module related settings
 	PState struct {
 		// PstateBR, optional field, refer to Bran Ratio in P-State plugin
@@ -58,8 +69,10 @@ type EnforceRequest struct {
 	MinWays uint32
 	// cache specification is not mandatory, this flag marks if cache values are used
 	UseCache bool
-	// enforce on which cache ids
-	CacheIDs []uint32
+	// enforce RDT request on these socket ID's
+	SocketIDs []uint32
+	// Mba
+	UseMba bool
 	// consume from base group or not
 	Consume bool
 	// request type
@@ -70,4 +83,24 @@ type EnforceRequest struct {
 	PStateBR float64
 	// Monitoring (used only if PState flag above is true)
 	PStateMonitoring bool
+}
+
+// RDTEnforce cotains all Cache results and MBA params together
+type RDTEnforce struct {
+	// all resassociations on the host
+	Resall map[string]*resctrl.ResAssociation
+	// target level of cache
+	TargetLev string
+	// target for MBA
+	TargetMba string
+	// cache calculations in all sockets
+	CandidateCache map[string]*libutil.Bitmap
+	// mba calculations in all sockets
+	CandidateMba map[string]*uint32
+
+	ChangedRes map[string]*resctrl.ResAssociation
+	// reserved cache values in all sockets
+	Reserved map[string]*cache.Reserved
+	// available cache schemata
+	AvailableSchemata map[string]*libutil.Bitmap
 }

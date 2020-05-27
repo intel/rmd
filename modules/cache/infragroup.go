@@ -119,7 +119,7 @@ func SetInfraGroup() error {
 	if !ok {
 		infraGroup = resctrl.NewResAssociation()
 		l := len(reserve.Schemata)
-		infraGroup.Schemata[cacheLevel] = make([]resctrl.CacheCos, l, l)
+		infraGroup.CacheSchemata[cacheLevel] = make([]resctrl.CacheCos, l, l)
 	}
 	infraGroup.CPUs = reserve.AllCPUs.ToString()
 
@@ -135,7 +135,7 @@ func SetInfraGroup() error {
 			ID:   uint8(id),
 			Mask: mask,
 		}
-		infraGroup.Schemata[cacheLevel][id] = cc
+		infraGroup.CacheSchemata[cacheLevel][id] = cc
 	}
 
 	gt := getGlobTasks()
