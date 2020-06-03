@@ -4,11 +4,7 @@ This guide shows how to configure RMD.
 
 ## configuration file search order
 
-The configuration file directory search order is:
-
-1. `/usr/local/etc/rmd`
-2. `/etc/rmd`
-3. `./etc/rmd`
+The configuration file directory search is `/etc/rmd`
 
 Besides, user can specify configuration file directory by provide --conf-dir option
 to RMD binary.

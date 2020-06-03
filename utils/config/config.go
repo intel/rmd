@@ -67,19 +67,17 @@ var configOnce sync.Once
 var def = Default{
 	"localhost",
 	8443,
-	"/usr/local/etc/rmd/cert/server",
-	"/usr/local/etc/rmd/cert/client",
+	"/etc/rmd/cert/server",
+	"/etc/rmd/cert/client",
 	"challenge",
 	"",
-	"/usr/local/etc/rmd/policy.toml",
+	"/etc/rmd/policy.toml",
 	false,
 	"/sys/fs/resctrl",
 }
 
 var defaultConfigPath = []string{
-	"/usr/local/etc/rmd/",
 	"/etc/rmd/",
-	"./etc/rmd",
 }
 
 var db = Database{}

@@ -25,9 +25,7 @@ type microArch struct {
 
 var cpumapOnce sync.Once
 var defaultConfigPath = []string{
-	"/usr/local/etc/rmd/",
 	"/etc/rmd/",
-	"./etc/rmd",
 }
 
 // NewCPUMap init internal cpu map

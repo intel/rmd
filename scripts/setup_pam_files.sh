@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 BASE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-PAMSRCFILE="$BASE/../etc/rmd/pam/rmd"
+PAMSRCFILE="/etc/rmd/pam/rmd"
 PAMDIR="/etc/pam.d"
 if [ -d $PAMDIR ]; then
     cp $PAMSRCFILE $PAMDIR

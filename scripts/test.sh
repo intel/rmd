@@ -49,14 +49,17 @@ rm -rf users
 # load code for setting GOBUILDOPTS variable based on command line params
 source $BASE/build-opts-get
 
+# replacement for old glide usage: glide novendor | grep -v /test
+DIRS_TO_TEST=`for ff in \`find . -name "*.go" | cut -f2 -d"/" | grep -v '/test/' | grep -v '/vendor/' | sort -u\`; do echo "./$ff/..."; done`
+
 cd $BASE/..
 if [ "$1" == "-u" ]; then
-    go test $GOBUILDOPTS -short -v -cover $(glide novendor | grep -v /test/)
+    go test $GOBUILDOPTS -short -v -cover $DIRS_TO_TEST
     exit $?
 fi
 
 if [ "$1" != "-i" -a "$1" != "-s" ]; then
-    go test $GOBUILDOPTS -short -v -cover $(glide novendor | grep -v /test/)
+    go test $GOBUILDOPTS -short -v -cover "$DIRS_TO_TEST"
 fi
 cd -
 
