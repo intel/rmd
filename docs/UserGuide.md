@@ -25,11 +25,11 @@ Users can create their own configuration files by referring the following
 sample. And RMD also provides the script(cmd/gen_conf.go) to generate it
 by probing the local host platform capabilities for proper CachePool settings.
 
-RMD will try to search `/usr/local/etc/rmd`, `/etc/rmd`, `./etc/rmd` to find
+RMD will try to search `/etc/rmd` to find
 configure files, put configuration files into these directory or RMD will
 use default configurations.
 
-Default location for main RMD configuration file is: /usr/local/etc/rmd/rmd.toml
+Default location for main RMD configuration file is: /etc/rmd/rmd.toml
 
 #### Cache module configuration and usage
 
@@ -95,7 +95,7 @@ Below extract from main configuration file (*rmd.toml*) presents sample configur
 ## Simple plugin enable/disable flag
 enabled = true
 ## path to loadable plugin file (.so library) with P-State implementation
-path = "/usr/local/etc/rmd/plugins/pstatelib.so"
+path = "/etc/rmd/plugins/pstatelib.so"
 ## port number with plugin's http server (REST API)
 port = 8080
 ```
@@ -137,7 +137,7 @@ several things by themselves.
 
     To run this script to setup users in Berkeley database:
     ```shell
-    $ sudo ./scripts/setup_rmd_users.sh
+    $ sudo /usr/share/rmd/setup_rmd_users.sh
     ```
     *Note: Only root user can setup or access users in Berkeley database*
 
@@ -159,7 +159,7 @@ $ sudo docker run  --privileged -v /proc:/proc \
 Launch RMD manually, by specifying configuration directory:
 
 ```shell
-$ sudo rmd --conf-dir /usr/local/etc/rmd
+$ sudo rmd --conf-dir /etc/rmd
 ```
 
 RMD can be launched in debug mode that exposes RESTAPI service on HTTP.

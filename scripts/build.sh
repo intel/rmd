@@ -7,9 +7,22 @@ __proj_dir="$(dirname "$__dir")"
 __repo_path="github.com/intel/rmd"
 BUILD_DATE=${BUILD_DATE:-$( date +%Y%m%d-%H:%M:%S )}
 
-version=$( git describe --tags --dirty --abbrev=14 | sed -E 's/-([0-9]+)-g/.\1+/' )
-revision=$( git rev-parse --short HEAD 2> /dev/null || echo 'unknown' )
-branch=$( git rev-parse --abbrev-ref HEAD 2> /dev/null || echo 'unknown' )
+# Use version number hardcoded in file
+version=$(cat ./VERSION)
+if [ -d ./.git ];
+then
+# Building from git working directory
+# Use data from repo (ex. add build number and commit id)
+    version+=$(git describe --tags --dirty --abbrev=14 | cut -f"3,4" -d"-" | sed -E 's/^g/+/' )
+    revision=$(git rev-parse --short HEAD 2> /dev/null || echo 'unknown' )
+    branch=$(git rev-parse --abbrev-ref HEAD 2> /dev/null || echo 'unknown' )
+else
+# Building from tarball/zip
+    revision=""
+    branch=""
+fi
+
+
 go_version=$( go version | sed -e 's/^[^0-9.]*\([0-9.]*\).*/\1/' )
 
 GO_MINOR_VERSION=$( go version | cut -c 14- | cut -d' ' -f1 | cut -d'.' -f2)
@@ -18,7 +31,12 @@ if [[ ${GO_MINOR_VERSION} -ge 11 ]]; then
 	export GO111MODULE=on
 fi
 
-echo "git commit: $(git log --pretty=format:"%H" -1)"
+if [ -d ./.git ];
+then
+    echo "git commit: $(git log --pretty=format:"%H" -1)"
+else
+    echo "building from tarbal"
+fi
 
 # rebuild binaries:
 export GOOS=${GOOS:-$(go env GOOS)}

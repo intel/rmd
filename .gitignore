@@ -8,3 +8,4 @@
 vendor/
 build/
 pkg-build/
+go.sum

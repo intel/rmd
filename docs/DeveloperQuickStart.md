@@ -34,7 +34,7 @@ $ make
 # install RMD
 $ sudo make install
 # This will install RMD into /usr/local/sbin/ along with some default
-configuration files under /usr/local/etc/rmd
+configuration files under /etc/rmd
 ```
 
 ## Run rmd
@@ -80,10 +80,6 @@ based https support.
 based https support.
 
 Read test.sh to understand what functional test cases do.
-
-## Glide
-
-Use glide (https://github.com/Masterminds/glide) to manage dependencies.
 
 ## Swagger
 

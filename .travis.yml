@@ -8,7 +8,7 @@ addons:
             - openssl
             - libpam0g-dev
             - db-util
-            - rpm
+
 go:
     - "1.12"
     - "1.13"
@@ -16,24 +16,20 @@ go:
 
 before_install:
     - if [ "${JOB}" = "check" ]; then go get -v golang.org/x/lint/golint; fi
-    - if [ "${JOB}" = "rpm" ]; then go get -v github.com/mh-cbon/go-bin-rpm; fi
-    - if [ "${JOB}" = "deb" ]; then go get -v github.com/mh-cbon/go-bin-deb; fi
 
 script:
-    - 'if [ "${JOB}" = "docker" ]; then make docker; fi'
-    - 'if [ "${JOB}" = "deb" ]; then make deb; fi'
-    - 'if [ "${JOB}" = "rpm" ]; then make rpm; fi'
     - 'if [ "${JOB}" = "check" ]; then make check; fi'
+    - 'if [ "${JOB}" = "build" ]; then make; fi'
+    - 'if [ "${JOB}" = "docker" ]; then make docker; fi'
 
 env:
     global:
         - GOARCH=amd64
         - GO111MODULE=on
     jobs:
-        - JOB=docker
-        - JOB=deb
-        - JOB=rpm
         - JOB=check
+        - JOB=build
+        - JOB=docker
 
 jobs:
     allow_failures:
