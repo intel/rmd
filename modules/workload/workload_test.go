@@ -75,6 +75,7 @@ func TestValidateWorkLoad(t *testing.T) {
 		c.Convey("Validate with empty workload", func(c C) {
 			subs := StubFunc(&proc.ListProcesses, map[string]proc.Process{"1": proc.Process{Pid: 1, CmdLine: "cmdline"}})
 			defer subs.Reset()
+
 			var cache uint32 = 1
 			var mba uint32 = 50
 			wl := &tw.RDTWorkLoad{}
@@ -93,7 +94,6 @@ func TestValidateWorkLoad(t *testing.T) {
 				})
 			})
 
-			// Test for Workload with Cache params provided
 			wl.Rdt.Cache.Max = &cache
 			c.Convey("Validate with MaxCache is not nil but MinCache is nil", func(c C) {
 				err := Validate(wl)
@@ -101,13 +101,13 @@ func TestValidateWorkLoad(t *testing.T) {
 
 				wl.Rdt.Cache.Min = &cache
 				wl.Rdt.Mba.Percentage = &mba
+
 				c.Convey("Validate with MaxCache & MinCache are not nil", func(c C) {
 
 					err := Validate(wl)
 					c.So(err, ShouldBeNil)
 				})
 			})
-
 			wl.TaskIDs = []string{"2"}
 			c.Convey("Validate with task ids does not existed", func(c C) {
 				err := Validate(wl)
@@ -182,20 +182,27 @@ func Test_fillWorkloadByPolicy(t *testing.T) {
 	correctWorkload.Status = "Successful"
 	correctWorkload.CosName = "3-guarantee"
 	correctWorkload.Policy = "gold"
+	correctWorkload.Plugins = make(map[string]map[string]interface{})
+
+	var myPstate = map[string]interface{}{
+		"ratio":      &origpStateRatio,
+		"monitoring": &pStateMonitoring,
+	}
+	correctWorkload.Plugins["pstate"] = myPstate
+
 	correctWorkload.Rdt.Cache.Max = &origCache
 	correctWorkload.Rdt.Cache.Min = &origCache
-	correctWorkload.PState.Ratio = &origpStateRatio
-	correctWorkload.PState.Monitoring = &pStateMonitoring
 
 	noPolicyWorkload := tw.RDTWorkLoad{}
 	noPolicyWorkload.CoreIDs = []string{"3"}
 	noPolicyWorkload.Origin = "REST"
 	noPolicyWorkload.Status = "Successful"
 	noPolicyWorkload.CosName = "3-guarantee"
+
+	noPolicyWorkload.Plugins = make(map[string]map[string]interface{})
+	noPolicyWorkload.Plugins["pstate"] = myPstate
 	noPolicyWorkload.Rdt.Cache.Max = &origCache
 	noPolicyWorkload.Rdt.Cache.Min = &origCache
-	noPolicyWorkload.PState.Ratio = &origpStateRatio
-	noPolicyWorkload.PState.Monitoring = &pStateMonitoring
 
 	type args struct {
 		wrkld *tw.RDTWorkLoad
@@ -558,43 +565,53 @@ func Test_populateEnforceRequest(t *testing.T) {
 	pStateMonitoringOn := "on"
 	pStateMonitoringOff := "off"
 
+	var myPstateOn = map[string]interface{}{
+		"ratio":      &origpStateRatio,
+		"monitoring": &pStateMonitoringOn,
+	}
+
+	var myPstateOff = map[string]interface{}{
+		"ratio":      &origpStateRatio,
+		"monitoring": &pStateMonitoringOff,
+	}
+
 	wMonitoringOn := tw.RDTWorkLoad{}
 	wMonitoringOn.CoreIDs = []string{"3"}
 	wMonitoringOn.Origin = "REST"
 	wMonitoringOn.Status = "None"
+	wMonitoringOn.Plugins = make(map[string]map[string]interface{})
+	wMonitoringOn.Plugins["pstate"] = myPstateOn
 	wMonitoringOn.Rdt.Cache.Max = &origCache
 	wMonitoringOn.Rdt.Cache.Min = &origCache
-	wMonitoringOn.PState.Ratio = &origpStateRatio
-	wMonitoringOn.PState.Monitoring = &pStateMonitoringOn
 
 	wMonitoringOff := tw.RDTWorkLoad{}
 	wMonitoringOff.CoreIDs = []string{"3"}
 	wMonitoringOff.Origin = "REST"
 	wMonitoringOff.Status = "None"
+	wMonitoringOff.Plugins = make(map[string]map[string]interface{})
+	wMonitoringOff.Plugins["pstate"] = myPstateOff
 	wMonitoringOff.Rdt.Cache.Max = &origCache
 	wMonitoringOff.Rdt.Cache.Min = &origCache
-	wMonitoringOff.PState.Ratio = &origpStateRatio
-	wMonitoringOff.PState.Monitoring = &pStateMonitoringOff
 
 	wPolicyExists := tw.RDTWorkLoad{}
 	wPolicyExists.CoreIDs = []string{"3"}
 	wPolicyExists.Origin = "REST"
 	wPolicyExists.Status = "None"
 	wPolicyExists.Policy = "silver"
+	wPolicyExists.Plugins = make(map[string]map[string]interface{})
+	wPolicyExists.Plugins["pstate"] = myPstateOn
 	wPolicyExists.Rdt.Cache.Max = &origCache
 	wPolicyExists.Rdt.Cache.Min = &origCache
-	wPolicyExists.PState.Ratio = &origpStateRatio
-	wPolicyExists.PState.Monitoring = &pStateMonitoringOn
 
 	wWrongPolicyExists := tw.RDTWorkLoad{}
 	wWrongPolicyExists.CoreIDs = []string{"3"}
 	wWrongPolicyExists.Origin = "REST"
 	wWrongPolicyExists.Status = "None"
 	wWrongPolicyExists.Policy = "fakePolicyName"
+	wWrongPolicyExists.Plugins = make(map[string]map[string]interface{})
+	wWrongPolicyExists.Plugins["pstate"] = myPstateOn
 	wWrongPolicyExists.Rdt.Cache.Max = &origCache
 	wWrongPolicyExists.Rdt.Cache.Min = &origCache
-	wWrongPolicyExists.PState.Ratio = &origpStateRatio
-	wWrongPolicyExists.PState.Monitoring = &pStateMonitoringOn
 
 	req := &tw.EnforceRequest{}
 
@@ -633,6 +650,7 @@ func Test_validate(t *testing.T) {
 	w.CoreIDs = []string{"3"}
 	w.Origin = "REST"
 	w.Status = "None"
+	w.Plugins = make(map[string]map[string]interface{})
 	w.Rdt.Cache.Max = &origCache
 	w.Rdt.Cache.Min = &origCache
 	w.Rdt.Mba.Percentage = &origMba
@@ -648,6 +666,7 @@ func Test_validate(t *testing.T) {
 	wLackOfCacheID := tw.RDTWorkLoad{}
 	wLackOfCacheID.Origin = "REST"
 	wLackOfCacheID.Status = "None"
+	wLackOfCacheID.Plugins = make(map[string]map[string]interface{})
 	wLackOfCacheID.Rdt.Cache.Max = &origCache
 	wLackOfCacheID.Rdt.Cache.Min = &origCache
 
@@ -656,6 +675,8 @@ func Test_validate(t *testing.T) {
 	wPolicyExists.Origin = "REST"
 	wPolicyExists.Status = "None"
 	wPolicyExists.Policy = "silver"
+
+	wPolicyExists.Plugins = make(map[string]map[string]interface{})
 	wPolicyExists.Rdt.Cache.Max = &origCache
 	wPolicyExists.Rdt.Cache.Min = &origCache
 
@@ -678,7 +699,6 @@ func Test_validate(t *testing.T) {
 		{"Incorrect Mba Value provided", args{w: &wWrongMbaValue}, true},
 		{"Lack of cache ID disabled", args{w: &wLackOfCacheID}, true},
 		{"Policy silver case", args{w: &wPolicyExists}, false},
-		{"Nil max cache", args{w: &wNilAsMxCache}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

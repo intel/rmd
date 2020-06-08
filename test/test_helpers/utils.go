@@ -55,11 +55,9 @@ func AssembleRequest(processes []*os.Process, coreIds []string, maxCache, minCac
 		data["policy"] = policy
 	} else {
 		params := map[string]int{"max": maxCache, "min": minCache}
-		var params1 = map[string]int{}
+
 		if mbaPercentage != -1 {
-			params1 = map[string]int{"percentage": mbaPercentage}
-		}
-		if mbaPercentage != -1 {
+			params1 := map[string]int{"percentage": mbaPercentage}
 			data["rdt"] = map[string]interface{}{"cache": params, "mba": params1}
 		} else {
 			data["rdt"] = map[string]interface{}{"cache": params}

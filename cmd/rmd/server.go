@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -13,11 +14,11 @@ import (
 
 	"github.com/emicklei/go-restful"
 	"github.com/intel/rmd/internal/openstack"
+	"github.com/intel/rmd/internal/plugins"
 	"github.com/intel/rmd/modules/cache"
 	"github.com/intel/rmd/modules/hospitality"
 	"github.com/intel/rmd/modules/mba"
 	"github.com/intel/rmd/modules/policy"
-	"github.com/intel/rmd/modules/pstate"
 	"github.com/intel/rmd/modules/workload"
 	"github.com/intel/rmd/utils/auth"
 	apptls "github.com/intel/rmd/utils/tls"
@@ -107,12 +108,33 @@ func Initialize(c *Config) (*restful.Container, error) {
 	workload.Register(prefix, wsContainer)
 	mba.Register(prefix, wsContainer)
 
-	// optional P-State plugin registration
-	if pstate.Instance != nil {
-		pstate.Instance.Register(prefix, wsContainer)
+	// iterate over list of modules and register enpoints for them
+	for pluginName, pluginInterface := range plugins.Interfaces {
+		log.Debugf("Registering REST endpoint for plugin: %v", pluginName)
+		if pluginInterface == nil {
+			// this should never happen but better handle this situation to avoid segfaults
+			log.Errorf("Nil plugin interface found in registered plugins list")
+			return wsContainer, errors.New("Internal error: nil interface")
+		}
+		endpoints := pluginInterface.GetEndpointPrefixes()
+		if len(endpoints) == 0 {
+			// no REST endpoints provided by this module
+			continue
+		}
+
+		ws := new(restful.WebService)
+		ws.
+			Path(prefix).
+			Consumes(restful.MIME_JSON).
+			Produces(restful.MIME_JSON)
+
+		for _, ep := range endpoints {
+			log.Debugf("- adding %v", ep)
+			ws.Route(ws.GET(ep).To(pluginInterface.HandleRequest))
+		}
+		wsContainer.Add(ws)
 	}
 
-	// TODO error handle
 	return wsContainer, nil
 }
 

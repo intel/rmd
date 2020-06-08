@@ -46,6 +46,10 @@ func GetConfig(name string) (map[string]interface{}, error) {
 		// Error is not related to lack of configuration
 		return map[string]interface{}{}, fmt.Errorf("plugins.GetConfig(%s) failed: %s", name, err.Error())
 	}
+	// viper is not informing about lack of section here so additional check needed
+	if len(result) == 0 {
+		return map[string]interface{}{}, fmt.Errorf("No config for %v found", name)
+	}
 
 	return result, nil
 }

@@ -12,6 +12,7 @@ title = "RMD config"
 # clientauth = "challenge"  # can be "no, require, require_any, challenge_given, challenge", challenge means require and verify.
 # unixsock = "/var/run/rmd.sock"
 # sysresctrl = "/sys/fs/resctrl"
+# plugins = "" # comma separated list of enabled RMD plugins, for each plugin (ex. PLUGINX) appropriate config section (ex. [PLUGINX]) is needed
 
 [debug]
 # enabled = false # allow rmd to run without any auth with http protocol
@@ -57,8 +58,6 @@ title = "RMD config"
 # service = "rmd"
 
 [pstate]
-## Simple plugin enable/disable flag
-enabled = true
 ## path to loadable plugin file (.so library) with P-State implementation
 path = "/etc/rmd/plugins/pstatelib.so"
 ## port number with plugin's http server (REST API)

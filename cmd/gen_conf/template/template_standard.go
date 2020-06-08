@@ -6,26 +6,27 @@ package template
 
 // Options are options for temlate will be replaced
 var Options = map[string]interface{}{
-	"address":            "localhost",
-	"debugport":          8081,
-	"tlsport":            8443,
-	"clientauth":         "challenge",
-	"logfile":            "/var/log/rmd.log",
-	"dbbackend":          "bolt",
-	"dbtransport":        "/var/run/rmd.db",
-	"logtostdout":        true,
-	"os_cacheways":       1,
-	"infra_cacheways":    19,
-	"max_shared":         10,
-	"guarantee":          10,
-	"besteffort":         7,
-	"shared":             2,
-	"shrink":             false,
-	"policypath":         "/etc/rmd/policy.toml",
-	"sysresctrl":         "/sys/fs/resctrl",
-	"pstate_enable_flag": false,
-	"pstate_plugin_path": "/etc/rmd/plugins/pstatelib.so",
-	"pstate_port":        8080,
+	"address":             "localhost",
+	"debugport":           8081,
+	"tlsport":             8443,
+	"clientauth":          "challenge",
+	"logfile":             "/var/log/rmd.log",
+	"dbbackend":           "bolt",
+	"dbtransport":         "/var/run/rmd.db",
+	"logtostdout":         true,
+	"os_cacheways":        1,
+	"infra_cacheways":     19,
+	"max_shared":          10,
+	"guarantee":           10,
+	"besteffort":          7,
+	"shared":              2,
+	"shrink":              false,
+	"policypath":          "/etc/rmd/policy.toml",
+	"sysresctrl":          "/sys/fs/resctrl",
+	"plugins":             "",
+	"pstate_plugin_path":  "/etc/rmd/plugins/pstatelib.so",
+	"pstate_port":         8080,
+	"dbValidatorInterval": 30, //seconds
 }
 
 // Templ is content of template
@@ -42,6 +43,8 @@ tlsport = {{.tlsport}}
 # clientcapath = "/etc/rmd/cert/client" # Only support pem format, hard code that CAFile is ca.pem
 clientauth = "{{.clientauth}}"  # can be "no, require, require_any, challenge_given, challenge", challenge means require and verify.
 # unixsock = "/var/run/rmd.sock"
+plugins = "{{.plugins}}" # comma separated list of enabled RMD plugins, for each plugin (ex. PLUGINX) appropriate config section (ex. [PLUGINX]) is needed
+dbValidatorInterval = {{.dbValidatorInterval}}
 
 [log]
 path = "{{.logfile}}"
@@ -86,8 +89,6 @@ usercert = "/etc/rmd/acl/roles/user/" # A cert is used to describe user info. Th
 service = "rmd"
 
 [pstate]
-## Simple plugin enable/disable flag
-enabled = {{.pstate_enable_flag}}
 ## path to loadable plugin file (.so library) with P-State implementation
 path = "{{.pstate_plugin_path}}"
 ## port number with plugin's http server (REST API)

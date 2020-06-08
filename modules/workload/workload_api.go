@@ -59,7 +59,26 @@ func Get(request *restful.Request, response *restful.Response) {
 		response.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
-	response.WriteEntity(ws)
+
+	// create general table for workloads with no backend data for User
+	userws := []wltypes.UserRDTWorkLoad{}
+
+	for _, singleWorkload := range ws {
+		wl := wltypes.UserRDTWorkLoad{}
+		wl.ID = singleWorkload.ID
+		wl.CoreIDs = singleWorkload.CoreIDs
+		wl.TaskIDs = singleWorkload.TaskIDs
+		wl.Policy = singleWorkload.Policy
+		wl.Status = singleWorkload.Status
+		wl.CosName = singleWorkload.CosName
+		wl.Rdt = singleWorkload.Rdt
+		wl.Plugins = singleWorkload.Plugins
+		wl.UUID = singleWorkload.UUID
+		wl.Origin = singleWorkload.Origin
+		userws = append(userws, wl)
+	}
+
+	response.WriteEntity(userws)
 }
 
 // GetByID handle GET /v1/workloads/{id}
@@ -76,7 +95,21 @@ func GetByID(request *restful.Request, response *restful.Response) {
 		response.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
-	response.WriteEntity(wl)
+
+	// create workload structure with no backend data for User
+	userwl := wltypes.UserRDTWorkLoad{}
+	userwl.ID = wl.ID
+	userwl.CoreIDs = wl.CoreIDs
+	userwl.TaskIDs = wl.TaskIDs
+	userwl.Policy = wl.Policy
+	userwl.Status = wl.Status
+	userwl.CosName = wl.CosName
+	userwl.Rdt = wl.Rdt
+	userwl.Plugins = wl.Plugins
+	userwl.UUID = wl.UUID
+	userwl.Origin = wl.Origin
+
+	response.WriteEntity(userwl)
 }
 
 // NewWorkload handle POST /v1/workloads
@@ -85,17 +118,31 @@ func GetByID(request *restful.Request, response *restful.Response) {
 // body : '{ "task_ids" : ["123"], "policy" : "silver" }'
 // body : '{ "core_ids" : ["123"], "cache" : { "max" : 4, "min": 2 }, pstate : { "ratio": 3.0, "monitoring" : true } }
 func NewWorkload(request *restful.Request, response *restful.Response) {
-	wl := new(wltypes.RDTWorkLoad)
-	err := request.ReadEntity(&wl)
+	// workload only to return to the user with no backend params
+	userWl := new(wltypes.UserRDTWorkLoad)
+	err := request.ReadEntity(&userWl)
 	// set owner/origin for workload
-	wl.Origin = "REST"
+	userWl.Origin = "REST"
 
-	log.Infof("Try to create workload %v", wl)
+	log.Infof("Try to create workload %v", userWl)
 	if err != nil {
 		response.AddHeader("Content-Type", "text/plain")
 		response.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	// create inner workload structure for all operations
+	wl := new(wltypes.RDTWorkLoad)
+	wl.ID = userWl.ID
+	wl.CoreIDs = userWl.CoreIDs
+	wl.TaskIDs = userWl.TaskIDs
+	wl.Policy = userWl.Policy
+	wl.Status = userWl.Status
+	wl.CosName = userWl.CosName
+	wl.Rdt = userWl.Rdt
+	wl.Plugins = userWl.Plugins
+	wl.UUID = userWl.UUID
+	wl.Origin = userWl.Origin
 
 	if err := Validate(wl); err != nil {
 		response.AddHeader("Content-Type", "text/plain")
@@ -128,7 +175,18 @@ func NewWorkload(request *restful.Request, response *restful.Response) {
 		response.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
-	response.WriteHeaderAndEntity(http.StatusCreated, wl)
+
+	//Need to update data after all operations to display them for User
+	userWl.ID = wl.ID
+	userWl.Status = wl.Status
+	userWl.CosName = wl.CosName
+	userWl.UUID = wl.UUID
+	// params below could change due to policy/manual params overwritting
+	userWl.Policy = wl.Policy
+	userWl.Rdt = wl.Rdt
+	userWl.Plugins = wl.Plugins
+
+	response.WriteHeaderAndEntity(http.StatusCreated, userWl)
 }
 
 // Patch handles PATCH /v1/workloads/{id}
@@ -158,7 +216,20 @@ func Patch(request *restful.Request, response *restful.Response) {
 			response.WriteErrorString(httpStatus, err.Error())
 			return
 		}
-		response.WriteEntity(wl)
+
+		userWl := wltypes.UserRDTWorkLoad{}
+		userWl.ID = wl.ID
+		userWl.CoreIDs = wl.CoreIDs
+		userWl.TaskIDs = wl.TaskIDs
+		userWl.Policy = wl.Policy
+		userWl.Status = wl.Status
+		userWl.CosName = wl.CosName
+		userWl.Rdt = wl.Rdt
+		userWl.Plugins = wl.Plugins
+		userWl.UUID = wl.UUID
+		userWl.Origin = wl.Origin
+
+		response.WriteEntity(userWl)
 	} else {
 		log.Error("REST origin cannot modify non-REST workload")
 		response.AddHeader("Content-Type", "text/plain")

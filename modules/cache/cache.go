@@ -344,19 +344,32 @@ func (c *Infos) GetByLevel(level uint32) error {
 			availPolicy := make(map[string]uint32)
 			for policyName, modules := range defPolicy {
 				//get max cache
-				iMax, err := strconv.Atoi(modules["cache"]["max"])
-				if err != nil {
-					log.Errorf("Error to get max cache. Reason: %s", err.Error())
+				iMaxAsInterface, ok := modules["cache"]["max"]
+				if !ok {
+					log.Error("Max cache doesn't exist in policy")
 					return rmderror.NewAppError(http.StatusInternalServerError,
-						"Error to get max cache", err)
+						"Max cache doesn't exist in policy", err)
+				}
+
+				iMax, ok := iMaxAsInterface.(int)
+				if !ok {
+					log.Error("Failed to convert type for max cache")
+					return rmderror.NewAppError(http.StatusInternalServerError,
+						"Failed to convert type for max cache", err)
 				}
 
 				//get min cache
-				iMin, err := strconv.Atoi(modules["cache"]["min"])
-				if err != nil {
-					log.Errorf("Error to get min cache. Reason: %s", err.Error())
+				iMinAsInterface, ok := modules["cache"]["min"]
+				if !ok {
+					log.Error("Min cache doesn't exist in policy")
 					return rmderror.NewAppError(http.StatusInternalServerError,
-						"Error to get min cache", err)
+						"Min cache doesn't exist in policy", err)
+				}
+				iMin, ok := iMinAsInterface.(int)
+				if !ok {
+					log.Error("Failed to convert type for min cache")
+					return rmderror.NewAppError(http.StatusInternalServerError,
+						"Failed to convert type for min cache", err)
 				}
 
 				err = getAvailablePolicyCount(availPolicy, iMax, iMin, allres, policyName, cacheLevel, sc.ID)

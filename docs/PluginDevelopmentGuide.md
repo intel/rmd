@@ -20,7 +20,7 @@ RMD is a single executable binary file (excluding plugins) that contains all app
 
 Please take a look on picture below:
 
-![alt text](./pics/forking.png "RMD start and fork")
+![alt text](./pic/forking.png "RMD start and fork")
 
 At the beginning RMD is launched as a single process with *root* privileges. Just after start this RMD process creates two *pipes* for communications, forks separate process and launches same RMD binary but with lower privileges (user *rmd*). These two processes execute concurrently and communicate using *pipes* created before forking. For better readability, starting from this point *root-process* will be used for RMD launched as *root* and *user-process* will be used to describe forked RMD with lower privileges.
 
@@ -28,7 +28,7 @@ As it was already stated both processes are using same binary but provide differ
 
 After it's launched, the *user-process* starts HTTP server for incoming REST API requests and initializes *proxy-client* module for sending requests to *root-process*. It uses database created by root process for storing *workloads*. Picture below presents both processes with marked parts of code that are initialized (only logical modules described in this documents are shown):
 
-![alt text](./pics/initialized-modules.png "Two RMD processes with initialized modules")
+![alt text](./pic/initialized-modules.png "Two RMD processes with initialized modules")
 
 At this point both processes are up and running.
 
@@ -91,7 +91,7 @@ Result returned by *proxy-server* is sent back over RPC to *proxy-client* and th
 
 All REST API request processing steps, described in previous sections are presented on picture below. Colored lines represents HTTP request processing for different endpoints. Black lines refers to function calls and data flow without usage of HTTP objects like json string or HTTP request structure).
 
-![alt text](./pics/rest-request-flow.png "Request flow")
+![alt text](./pic/rest-request-flow.png "Request flow")
 
 Please bare in mind, that for picture simplicity, some steps like authentication and database update have been omitted.
 
@@ -120,12 +120,19 @@ When operating on workloads, RMD uses workload id for getting information about 
 
 Please see workload POST with Cache Enforce() example on diagram below:
 
-![alt](./pics/Workload-POST.png "Workload POST diagram")
+![alt](./pic/Workload-POST.png "Workload POST diagram")
 
-The "id" parameter returned from enforce flow through *proxy-client* will be is stored in RMD database. When PATCH or DELETE request will be received by RMD the appropriate *Release()* call will receive all workload parameters for given module and additionally previously obtained "id":
+The "id" parameter returned from enforce flow through *proxy-client* will be is stored in RMD database. When PATCH or DELETE request will be received by RMD the appropriate *Release()* call will receive all workload parameters for given module and additionally previously obtained "id" passed in params map as "ENFORCEID":
 
-![alt](./pics/Workload-DELETE.png "Workload DELETE diagram")
+![alt](./pic/Workload-DELETE.png "Workload DELETE diagram")
 
+### Module capabilities
+
+Different RMD modules provides different functionalities but it is possible that two (or more) loaded plugins handle same type of platform resource (ex. frequency scaling). To avoid potential conflicts between plugins' access to platform, RMD should be able to check capabilities of each plugin.
+
+Plugin should return it's capabilities as a list of identifiers of used resource(s) (ex. *rdt_cat* for cache allocation). RMD will verify if there's no overlaps of lists from different plugins and exit immediately if any conflict detected.
+
+*NOTE* Current version (*v0.3.0*) of RMD is ignoring plugins' capabilities. This functionality will be added in future releases and list of known capabilities will be provided.
 
 ## Loadable module development
 
@@ -138,6 +145,7 @@ Below is the list of necessary functions that has to be provided by each externa
 3. Request handling function - will be called by request router when HTTP request for this module's endpoint arrives
 4. Validate function - used by *workload* module to check if parameters received in workload description (json data in HTTP request) are valid
 5. *Enforce* and *Release* flow functions - they will be called by *worklaod* module (through *proxy-client* - *proxy-server* pair) during platform resource manipulation
+6. Capability returning function - used to inform RMD which platform resources will be used (modified) by this plugin
 
 ### ModuleInterface design
 
@@ -160,7 +168,10 @@ type ModuleInterface interface {
     GetEndpointPrefixes() []string
     
     // HandleRequest is called by HTTP request routing mechanism
-    HandleRequest(wrt http.ResponseWriter, req *http.Request) error
+    //
+    // NOTE: currently "emicklei/go-restfull" package is used for HTTP requests routing
+    // and function below uses is using params from this package
+    HandleRequest(request *restful.Request, response *restful.Response)
 
     // Validate allows workload module to check parameters before trying to enforce them
     Validate(params map[string]interface{}) error
@@ -173,14 +184,17 @@ type ModuleInterface interface {
     // Release removes setting for given params
     // (in case of pstate it will be just disabling of monitoring for specified cores)
     Release(params map[string]interface{}) error
+
+    // GetCapabilities returns comma separated list of platform resources used by plugin
+    GetCapabilities() string
 }
 ```
 
 To ensure full compatibility additional constraints are defined:
 
-1. *workload* in RMD can be specified for core ids *OR* process (task) ids so only one of *cpus* and *tasks* parameter will be placed in *params* argument for *Validate()*, *Enforce()* and *Release()* calls
+1. *workload* in RMD can be specified for core ids *OR* process (task) ids so only one of *CPUS* and *TASKS* parameter will be placed in *params* argument for *Validate()*, *Enforce()* and *Release()* calls
 2. if module is not exposing any REST endpoint it should return empty slice from *GetEndpointPrefixes()* function
-3. type of parameters in HandleRequests() are taken from *net/http* package from Go standard library
+3. type of parameters in HandleRequests() are taken from *github.com/emicklei/go-restfull* package
 
 ### Building the plugin for RMD
 
@@ -197,33 +211,3 @@ To build loadable plugin instead of executable proper Go build mode has to be us
 ```bash
 go build -buildmode=plugin -o output_directory/plugin_file.so ./
 ```
-
-## Things to be done/decided/investigated
-
-1. Implementation tasks to be done for new architecture
-    1. workload description (json) and structure (RDTworkload) update (partially prepared by Michal)
-    2. configuration file and parsing function update to support multiple plugins:
-        * modules loading based on configuration 
-        * to be decided: what to do when one of modules broken/can't be loaded
-        * storing modules in map
-        * registering modules' REST endpoints
-    3. proxy client and server refactoring to handle modules
-        * module and function name passing over RPC - as string "module.request" or as two values in *params* map
-        * direct Enforce()/Release() calling by proxy-server on specified module
-        * in first phase support only for P-State and Cache
-    4. workload module refactoring:
-        * checking if module described in json is loaded
-        * param (from json) validation before enforce/release using new Validate() method
-        * calling proxy client for enforce/release
-        * "cos_name" is now a workload param while in facts it's a cache internal value
-    5. HTTP REST handling/routing refactoring:
-        * to be decided: usage of simple net/http from Go, emicklei/go-restful or gorilla/mux package
-        * forwarding GET method calls to modules
-        * workload, policy, mba and hospitality support temporary without change
-    6. P-State implementation update for new interface
-    7. Cache module refactoring to support new worklflow
-        * Enforce() and Release() refactored to new signature
-        * Validate() added and used in workload
-        * in general: preparation for future extraction to module
-2. Currently *Enforce()* and *Release()* functions are not returning any object - only error
-    * for P-State it is OK but it should be investigated if other modules can need something more

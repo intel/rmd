@@ -3,15 +3,19 @@ package workload
 // workload api objects to represent resources in RMD
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/intel/rmd/internal/plugins"
 	proxyclient "github.com/intel/rmd/internal/proxy/client"
 	"github.com/intel/rmd/modules/cache"
 	"github.com/intel/rmd/utils/cpu"
@@ -23,9 +27,9 @@ import (
 	"github.com/intel/rmd/internal/db"
 	rmderror "github.com/intel/rmd/internal/error"
 	"github.com/intel/rmd/modules/policy"
-	"github.com/intel/rmd/modules/pstate"
 	wltypes "github.com/intel/rmd/modules/workload/types"
 	util "github.com/intel/rmd/utils"
+	appConf "github.com/intel/rmd/utils/config"
 )
 
 const (
@@ -56,41 +60,53 @@ func fillWorkloadByPolicy(wrkld *wltypes.RDTWorkLoad) error {
 	}
 
 	// cache allocation is not mandatory so use param if they exists
-	maxWays, err := strconv.Atoi(policy["cache"]["max"])
-	if err == nil {
+	var errMax error
+	var errMin error
+
+	// check and copy cache data
+	maxCache, ok := policy["cache"]["max"].(int)
+	if !ok {
+		errMax = fmt.Errorf("Failed to convert type for max cache")
+	}
+
+	minCache, ok := policy["cache"]["min"].(int)
+	if !ok {
+		errMin = fmt.Errorf("Failed to convert type for min cache")
+	}
+
+	if errMax == nil && errMin == nil {
 		wrkld.Rdt.Cache.Max = new(uint32)
-		*wrkld.Rdt.Cache.Max = uint32(maxWays)
-	}
-
-	minWays, err := strconv.Atoi(policy["cache"]["min"])
-	if err == nil {
+		*wrkld.Rdt.Cache.Max = uint32(maxCache)
 		wrkld.Rdt.Cache.Min = new(uint32)
-		*wrkld.Rdt.Cache.Min = uint32(minWays)
+		*wrkld.Rdt.Cache.Min = uint32(minCache)
 	}
 
-	if (wrkld.Rdt.Cache.Min != nil && wrkld.Rdt.Cache.Max == nil) || (wrkld.Rdt.Cache.Min == nil && wrkld.Rdt.Cache.Max != nil) {
+	if (wrkld.Rdt.Cache.Max != nil && wrkld.Rdt.Cache.Min == nil) || (wrkld.Rdt.Cache.Max == nil && wrkld.Rdt.Cache.Min != nil) {
 		return fmt.Errorf("Invalid policy - exactly one *Cache param defined")
 	}
 
-	// check if Power/P-State module is enabled
-	if pstate.Instance != nil {
-		log.Debugf("Get pstate params for %s policy and fill workload", wrkld.Policy)
-		if ratioString, ok := policy["pstate"]["ratio"]; ok {
-			// convert string to float64
-			ratio, err := strconv.ParseFloat(ratioString, 64)
-			if err != nil {
-				return rmderror.NewAppError(http.StatusInternalServerError,
-					"Broken policy for P-State. %v", err)
-			}
-			wrkld.PState.Ratio = new(float64)
-			*wrkld.PState.Ratio = ratio
-			wrkld.PState.Monitoring = new(string)
-			*wrkld.PState.Monitoring = "on"
-		} else {
-			return fmt.Errorf("Error while getting Ratio from P-State policy. %v", err)
-		}
-
+	// check and copy MBA data
+	valMba, ok := policy["mba"]["percentage"].(int)
+	if ok {
+		wrkld.Rdt.Mba.Percentage = new(uint32)
+		*wrkld.Rdt.Mba.Percentage = uint32(valMba)
 	}
+
+	// get data from policy and fill plugins' params
+	for mod, data := range policy {
+		log.Debugf("Params for module %v found in policy", mod)
+		// "cache" and "mba" are currently internal part of workload - not plugins
+		if mod == "cache" || mod == "mba" {
+			continue
+		}
+		// check and create Plugins only if there's a need to put something inside
+		if wrkld.Plugins == nil {
+			wrkld.Plugins = make(map[string]map[string]interface{})
+		}
+		// copy plugin params into workload
+		wrkld.Plugins[mod] = data
+	}
+
 	return nil
 }
 
@@ -109,9 +125,10 @@ func validate(w *wltypes.RDTWorkLoad) error {
 	}
 
 	if w.Policy == "" {
+		// MBA part
 		// there have to be both cache values or none of them
 		if (w.Rdt.Cache.Max == nil && w.Rdt.Cache.Min != nil) || (w.Rdt.Cache.Max != nil && w.Rdt.Cache.Min == nil) {
-			return fmt.Errorf("Need to provide both *_cache or none of them")
+			return fmt.Errorf("Need to provide both cache.* or none of them")
 		}
 		// If MBA values are provided :
 		// 1. Check if its a Cache guaranteed request
@@ -144,34 +161,42 @@ func validate(w *wltypes.RDTWorkLoad) error {
 			}
 		}
 
-		if w.PState.Ratio != nil || w.PState.Monitoring != nil {
-			// when P-State related setting forced check if P-State plugin enabled
-			if pstate.Instance == nil {
-				return fmt.Errorf("P-State configuration given while plugin not enabled")
+		// Plugins part
+		// call Validate() for each loaded module defined in this workload
+		for module, params := range w.Plugins {
+			log.Debugf("Validating params for %v module", module) // temporary log
+
+			// if params changed fetch module (if exists)
+			pluginIface, ok := plugins.Interfaces[module]
+			if !ok {
+				// module not loaded but requested
+				return rmderror.NewAppError(http.StatusBadRequest, "Trying to use module that is not loaded")
 			}
-		}
-		if w.PState.Ratio != nil && *w.PState.Ratio <= 0.0 {
-			return fmt.Errorf("Invalid P-State Branch Ratio given")
-		}
-		if w.PState.Ratio != nil && w.PState.Monitoring == nil {
-			// when Branch Ratio given then implicitly enable monitoring
-			w.PState.Monitoring = new(string)
-			*w.PState.Monitoring = "on"
-		}
-		if w.PState.Monitoring != nil {
-			switch *w.PState.Monitoring {
-			case "on":
-				fallthrough
-			case "off":
-				break
-			case "ON":
-				*w.PState.Monitoring = "on"
-				break
-			case "OFF":
-				*w.PState.Monitoring = "off"
-				break
-			default:
-				return fmt.Errorf("Invalid P-State Monitoring value")
+			if pluginIface == nil {
+				// module seems to be loaded but interface is nil
+				return rmderror.NewAppError(http.StatusInternalServerError, "Error when processing loaded modules")
+			}
+			// unify param types coming from JSON
+			paramsMap, err := util.UnifyMapParamsTypes(params)
+			if err != nil {
+				return err
+			}
+			// add core ids and process ids to params
+			valInts, err := prepareCoreIDs(w.CoreIDs)
+			if err != nil {
+				return rmderror.NewAppError(http.StatusBadRequest, "Invalid params (core ids) received")
+			}
+			paramsMap["CPUS"] = valInts
+			valInts, err = prepareCoreIDs(w.TaskIDs)
+			if err != nil {
+				return rmderror.NewAppError(http.StatusBadRequest, "Invalid params (task ids) received")
+			}
+			paramsMap["TASKS"] = valInts
+
+			// and validate params
+			err = pluginIface.Validate(paramsMap)
+			if err != nil {
+				return rmderror.NewAppError(http.StatusBadRequest, "Invalid params received", err)
 			}
 		}
 	} else {
@@ -184,14 +209,11 @@ func validate(w *wltypes.RDTWorkLoad) error {
 
 	// at least one of following params must be provided:
 	// - policy (checked above)
-	// - Cache.Max && Cache.min
-	// - PState.Ratio || PState.Monitoring
+	// - RDT.Cache or RDT.Mba
+	// - other loadable plugins params
+
 	if w.Rdt.Cache.Max != nil && w.Rdt.Cache.Min != nil {
 		// Cache params defined
-		return nil
-	}
-	if w.PState.Ratio != nil || w.PState.Monitoring != nil {
-		// P-State params defined
 		return nil
 	}
 
@@ -200,8 +222,13 @@ func validate(w *wltypes.RDTWorkLoad) error {
 		return nil
 	}
 
+	if len(w.Plugins) > 0 {
+		// params exists and are validated above - so workload should be fine
+		return nil
+	}
+
 	// if reached this point then something went wrong
-	return fmt.Errorf("No Cache/MBA/PState params in workload")
+	return fmt.Errorf("No RDT/Plugins params in workload")
 }
 
 func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *wltypes.RDTEnforce) error {
@@ -378,7 +405,7 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 		}
 		resAss = newResAssForMba(resAss, candidateMba, targetMba)
 	}
-	// cache alocation settings end
+	// cache allocation settings end
 
 	if len(w.CoreIDs) >= 0 {
 		bm, _ := cache.BitmapsCPUWrapper(w.CoreIDs)
@@ -454,35 +481,31 @@ func Enforce(w *wltypes.RDTWorkLoad) error {
 		return err
 	}
 
-	// p-state settings begin
-	if pstate.Instance != nil {
-		// if P-State used in this Workload then enforce it
-		if w.PState.Ratio != nil || w.PState.Monitoring != nil {
-			log.Debugf("Enforcing P-State enebled Workload")
-			// at this point we don't know exact size due to possibility of "3-8" syntax usage
-			// coreids is []int type
-			coreids, err := prepareCoreIDs(w.CoreIDs)
-			if err != nil {
-				log.Errorf("Failed to prepare core IDs list for enforce")
-				return err
-			}
-
-			// prepare generic params for module
-			params := make(map[string]interface{})
-			if w.PState.Monitoring != nil {
-				params["ratio"] = *w.PState.Ratio
-			}
-			if w.PState.Monitoring != nil {
-				params["monitoring"] = *w.PState.Monitoring
-			}
-
-			err = pstate.Instance.Enforce(coreids, []int{}, params)
-			if err != nil {
-				log.Warningf("Could not patch pstate config: %s", err)
-			}
+	for module, params := range w.Plugins {
+		log.Debugf("Sending enforce request to %v module with %v params", module, params)
+		paramsMap, err := util.UnifyMapParamsTypes(params)
+		if err != nil {
+			return err
 		}
+
+		// params already validated in previous step so no error expected here
+		valInts, _ := prepareCoreIDs(w.CoreIDs)
+		paramsMap["CPUS"] = valInts
+		valInts, _ = prepareCoreIDs(w.TaskIDs)
+		paramsMap["TASKS"] = valInts
+
+		result, err := proxyclient.Enforce(module, paramsMap)
+		if err != nil {
+			return err
+		}
+
+		// initialize before use if Plugins map doesn't exist
+		if w.BackendPluginInfo == nil {
+			w.BackendPluginInfo = make(map[string]string)
+		}
+
+		w.BackendPluginInfo[module] = result
 	}
-	// p-state settings end
 
 	w.Status = wltypes.Successful
 	return nil
@@ -510,24 +533,33 @@ func Release(w *wltypes.RDTWorkLoad) error {
 		cpubm = cpubm.Axor(wcpubm)
 	}
 
-	// check if P-State related params should be verified
-	if pstate.Instance != nil {
-		// if P-State used in this Workload then remove it
-		if w.PState.Ratio != nil || w.PState.Monitoring != nil {
-			log.Debugf("Releasing P-State enebled Workload")
-			// convert core ids in []string into coreids in []int
+	for module, params := range w.Plugins {
+		log.Debugf("Sending release request to %v module with %v params", module, params) // temporary log
 
-			// coreids is []int type
-			coreids, err := prepareCoreIDs(w.CoreIDs)
-			if err != nil {
-				log.Errorf("Failed to prepare core IDs list for release")
-				return err
-			}
+		paramsMap, err := util.UnifyMapParamsTypes(params)
+		if err != nil {
+			return err
+		}
 
-			err = pstate.Instance.Release(coreids, []int{}, map[string]interface{}{})
-			if err != nil {
-				log.Warningf("Could not release pstate config(s): %s", err)
-			}
+		if w.BackendPluginInfo != nil {
+			paramsMap["ENFORCEID"] = w.BackendPluginInfo[module]
+		}
+
+		// add core ids and process ids to params
+		valInts, err := prepareCoreIDs(w.CoreIDs)
+		if err != nil {
+			return errors.New("Invalid params (core ids) received")
+		}
+		paramsMap["CPUS"] = valInts
+		valInts, err = prepareCoreIDs(w.TaskIDs)
+		if err != nil {
+			return errors.New("Invalid params (task ids) received")
+		}
+		paramsMap["TASKS"] = valInts
+
+		err = proxyclient.Release(module, paramsMap)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -571,6 +603,7 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 		if len(w.Policy) > 0 {
 			fillWorkloadByPolicy(w)
 		}
+
 		if patched.Rdt.Cache.Max != nil {
 			// param manually defined - drop policy information
 			w.Policy = ""
@@ -613,31 +646,58 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 			}
 		}
 
-		if patched.PState.Ratio != nil {
-			// param manually defined - drop policy information
-			w.Policy = ""
-			if w.PState.Ratio == nil {
-				w.PState.Ratio = new(float64)
+		for module, params := range patched.Plugins {
+			log.Debugf("Validating params for %v module", module) // temporary log
+			if module == "cache" {
+				// temporary cache is built-in module so ignore it here
+				continue
 			}
-			if *w.PState.Ratio != *patched.PState.Ratio {
-				*w.PState.Ratio = *patched.PState.Ratio
-				reEnforce = true
-			}
-		}
 
-		if patched.PState.Monitoring != nil {
-			// param manually defined - drop policy information
-			w.Policy = ""
-			if w.PState.Monitoring == nil {
-				w.PState.Monitoring = new(string)
+			// first check if params for module changed
+			if reflect.DeepEqual(w.Plugins[module], params) {
+				// both maps (sets of params) have same contents so skip this iteration
+				continue
 			}
-			if *w.PState.Monitoring != *patched.PState.Monitoring {
-				*w.PState.Monitoring = *patched.PState.Monitoring
-				reEnforce = true
+
+			paramsMap, err := util.UnifyMapParamsTypes(params)
+			if err != nil {
+				return err
+
+			}
+
+			// add core ids and process ids to params
+			valInts, err := prepareCoreIDs(w.CoreIDs)
+			if err != nil {
+				return errors.New("Invalid params (core ids) received")
+			}
+			paramsMap["CPUS"] = valInts
+
+			valInts, err = prepareCoreIDs(w.TaskIDs)
+			if err != nil {
+				return errors.New("Invalid params (task ids) received")
+			}
+			paramsMap["TASKS"] = valInts
+
+			// if params changed fetch module (if exists)
+			reEnforce = true
+			pluginIface, ok := plugins.Interfaces[module]
+			if !ok {
+				// module not loaded but requested
+				return rmderror.NewAppError(http.StatusBadRequest, "Trying to use module that is not loaded")
+			}
+			if pluginIface == nil {
+				// module seems to be loaded but interface is nil
+				return rmderror.NewAppError(http.StatusInternalServerError, "Error when processing loaded modules")
+			}
+
+			// and validate params
+			err = pluginIface.Validate(paramsMap)
+			if err != nil {
+				return rmderror.NewAppError(http.StatusBadRequest, "Invalid params received", err)
 			}
 		}
 	} else {
-		// policy defined (so shoul be taken as it's the priority param)
+		// policy defined (so should be taken as it's the priority param)
 		if patched.Policy != w.Policy {
 			// only if policy changed there's a need to update/reenforce workload
 			w.Policy = patched.Policy
@@ -648,7 +708,7 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 
 	if reEnforce == true {
 		if err := Release(w); err != nil {
-			return rmderror.NewAppError(http.StatusInternalServerError, "Faild to release workload",
+			return rmderror.NewAppError(http.StatusInternalServerError, "Failed to release workload",
 				fmt.Errorf(""))
 		}
 
@@ -658,6 +718,9 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 		if len(patched.CoreIDs) > 0 {
 			w.CoreIDs = patched.CoreIDs
 		}
+
+		w.Plugins = patched.Plugins
+
 		return Enforce(w)
 	}
 
@@ -687,7 +750,7 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 			bm, err := cache.BitmapsCPUWrapper(patched.CoreIDs)
 			if err != nil {
 				return rmderror.NewAppError(http.StatusBadRequest,
-					"Failed to Pareser workload coreIDs.", err)
+					"Failed to parse workload coreIDs.", err)
 			}
 			// TODO: check if this new CoreIDs overwrite other resource group
 			targetResAss.CPUs = bm.ToString()
@@ -809,20 +872,6 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 					"MBA is only supported for Guarantee Cache Request")
 			}
 		}
-		if w.PState.Ratio != nil {
-			req.PState = true
-			req.PStateBR = *w.PState.Ratio
-		}
-		if w.PState.Monitoring != nil {
-			// copy monitoring setting to request
-			if *w.PState.Monitoring == "on" {
-				req.PStateMonitoring = true
-			} else {
-				req.PStateMonitoring = false
-			}
-			// mark that PState settings used in this request
-			req.PState = true
-		}
 	} else {
 		policy, err := policy.GetDefaultPolicy(w.Policy)
 		if err != nil {
@@ -830,42 +879,23 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 				"Could not find the Policy.", err)
 		}
 
-		maxWays, errMax := strconv.Atoi(policy["cache"]["max"])
-		if errMax == nil {
-			req.MaxWays = uint32(maxWays)
-		} else {
+		maxWays, okMax := policy["cache"]["max"].(int)
+		if !okMax {
 			log.Error("Max cache reading error - cache way assignment will be skipped")
+		} else {
+			req.MaxWays = uint32(maxWays)
 		}
 
-		minWays, errMin := strconv.Atoi(policy["cache"]["min"])
-		if errMin == nil {
-			req.MinWays = uint32(minWays)
-		} else {
+		minWays, okMin := policy["cache"]["min"].(int)
+		if !okMin {
 			log.Error("Min cache reading error - cache way assignment will be skipped")
+		} else {
+			req.MinWays = uint32(minWays)
 		}
 
 		// use cache params only if both defined
-		if errMax == nil && errMin == nil {
+		if okMax && okMin {
 			req.UseCache = true
-		}
-
-		// check if Power/P-State module is enabled
-		if pstate.Instance != nil {
-			log.Debugf("Get pstate params for %s policy and populate enforce request", w.Policy)
-			if ratioString, ok := policy["pstate"]["ratio"]; ok {
-				// convert string to float64
-				ratio, err := strconv.ParseFloat(ratioString, 64)
-				if err != nil {
-					return rmderror.NewAppError(http.StatusInternalServerError,
-						"Broken policy for P-State", err)
-				}
-				req.PState = true
-				req.PStateBR = ratio
-				req.PStateMonitoring = true
-			} else {
-				return rmderror.NewAppError(http.StatusInternalServerError,
-					"Error while getting Ratio from P-State policy", err)
-			}
 		}
 	}
 
@@ -1076,6 +1106,9 @@ func Validate(w *wltypes.RDTWorkLoad) error {
 
 // Update a workload
 func Update(w, patched *wltypes.RDTWorkLoad) error {
+
+	dbContentValidation()
+
 	err := update(w, patched)
 	if err != nil {
 		log.Error("Failed to update/patch workload")
@@ -1100,6 +1133,7 @@ func Init() error {
 		log.Error("Cannot create database")
 	} else {
 		workloadDatabase = temp
+		go startDBContentValidation()
 	}
 	isMbaSupported, err = proc.IsMbaAvailable()
 	if err != nil {
@@ -1158,4 +1192,61 @@ func prepareCoreIDs(w []string) ([]int, error) {
 	}
 
 	return coreids, nil
+}
+
+// shouldRemoveWorkload checks if all processes for workload exists
+// return false if at least one task from workload still exists in the system
+func shouldRemoveWorkload(w *wltypes.RDTWorkLoad) bool {
+
+	for _, task := range w.TaskIDs {
+
+		result, err := os.Stat("/proc/" + task)
+		if (err == nil) && (result.IsDir() == true) {
+			return false
+		}
+	}
+	//workload should be removed
+	return true
+}
+
+func startDBContentValidation() {
+	appconf := appConf.NewConfig()
+	interval := appconf.Def.DbValidatorInterval
+	if interval <= 0 {
+		log.Errorf("Failed to start DBValidator due to wrong interval value: %v", interval)
+		return
+	}
+	for {
+		dbContentValidation()
+		time.Sleep(time.Duration(interval) * time.Second)
+	}
+}
+
+// dbContentValidation checks DB for outdated workloads
+// when related taskIDs/processIDs don't exist anymore
+func dbContentValidation() {
+
+	l.Lock()
+	defer l.Unlock()
+	ws, err := GetAll()
+	if err == nil {
+		for _, singleWorkload := range ws {
+			// validation only for workloads/policies related with taskID/processID
+			if len(singleWorkload.TaskIDs) != 0 {
+				// remove from DB workloads which are related with not existing
+				// any more tasks/processes in the system (remove when all tasks doesn't exist)
+				if shouldRemoveWorkload(&singleWorkload) {
+					err := Delete(&singleWorkload)
+					if err != nil {
+						// just log here
+						log.Errorf("dbContentValidation failed to delete invalid workload from db: %s", err)
+					}
+					// inform about deleted workloads
+					log.Infof("Workload %v deleted by DBValidator", singleWorkload)
+				}
+			}
+		}
+	} else {
+		log.Errorf("dbContentValidation failed to validate DB for outdated workloads")
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	dbconf "github.com/intel/rmd/internal/db/config"
@@ -13,10 +14,8 @@ import (
 	proxyclient "github.com/intel/rmd/internal/proxy/client"
 	proxyserver "github.com/intel/rmd/internal/proxy/server"
 	proxytypes "github.com/intel/rmd/internal/proxy/types"
-	"github.com/intel/rmd/modules/pstate"
 	util "github.com/intel/rmd/utils"
 	"github.com/intel/rmd/utils/bootcheck"
-	"github.com/intel/rmd/utils/config"
 	appconf "github.com/intel/rmd/utils/config"
 	"github.com/intel/rmd/utils/flag"
 	"github.com/intel/rmd/utils/log"
@@ -41,7 +40,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if err := config.Init(); err != nil {
+	if err := appconf.Init(); err != nil {
 		fmt.Println("Init config failed:", err)
 		os.Exit(1)
 	}
@@ -50,43 +49,49 @@ func main() {
 		os.Exit(1)
 	}
 
-	// check if pstate configuration exists and module is enabled
-	pcfg, err := plugins.GetConfig("pstate")
-	if err == nil && len(pcfg) > 0 {
-		cfgflag, ok1 := pcfg["enabled"]
-		cfgpath, ok2 := pcfg["path"]
-		if !ok1 || !ok2 {
-			// incomplete configuration
-			fmt.Println("Configuration for 'pstate' is not complete - exiting")
+	cfg := appconf.NewConfig()
+	pluginsList := strings.Split(cfg.Def.Plugins, ",")
+	for _, pluginName := range pluginsList {
+		pluginName = strings.Trim(pluginName, " \t")
+		if len(pluginName) == 0 {
+			continue
+		}
+		fmt.Println("loading RMD plugin:", pluginName)
+		if strings.Trim(pluginName, " ") == "cache" {
+			// cache is currently hardcoded - no need to do anything
+			continue
+		}
+		pluginCfg, err := plugins.GetConfig(pluginName)
+		if err != nil {
+			fmt.Println("Failed to load config for plugin", pluginName, "with error:", err.Error())
+		}
+		pluginPath, ok := pluginCfg["path"]
+		if !ok {
+			// should fail here as without path it's not possible to load plugin
+			fmt.Println("Unable to load", pluginName, "plugin. Please check plugin path")
+			os.Exit(1)
+		}
+		pluginPathString, ok := pluginPath.(string)
+		if !ok {
+			fmt.Println("Unable to load", pluginName, "plugin. Please check plugin path")
+			os.Exit(1)
+		}
+		modIface, err := plugins.Load(pluginPathString)
+		if err != nil {
+			fmt.Println("Failed to load plugin file", pluginPathString, "with error:", err.Error())
+			os.Exit(1)
+		}
+		err = modIface.Initialize(pluginCfg)
+		if err != nil {
+			fmt.Println("Failed to load", pluginName, "plugin with error:", err.Error())
 			os.Exit(1)
 		}
 
-		enabled, ok1 := cfgflag.(bool)
-		path, ok2 := cfgpath.(string)
-		if !ok1 || !ok2 {
-			// incorrect types in configuration
-			fmt.Println("Configuration for 'pstate' has incorrect value types - exiting")
+		err = plugins.Store(pluginName, modIface)
+		if err != nil {
+			fmt.Println("Failed to load", pluginName, "plugin with error:", err.Error())
 			os.Exit(1)
 		}
-
-		if enabled {
-			err := pstate.Load(path)
-			if err != nil {
-				fmt.Println("Failed to load pstate plugin library:", err.Error())
-				os.Exit(1)
-			}
-			// add information about proxy to configuration
-			pcfg["RMDPROXY"] = &proxyclient.GenericCaller
-			// pstate.Instance cannot be nil if no error from Load() returned
-			err = pstate.Instance.Initialize(pcfg)
-			if err != nil {
-				fmt.Println("Failed to initialize 'pstate' instance:", err.Error())
-				os.Exit(1)
-			}
-		}
-	} else {
-		// logger should work here so only log this message
-		loginfo.Println("No proper config for 'pstate' - skipping P-State module")
 	}
 
 	if err := proc.Init(); err != nil {
@@ -200,8 +205,8 @@ func main() {
 	in.Writer = os.NewFile(3, "")
 	//in.Reader
 	in.Reader = os.NewFile(4, "")
-	err = proxyclient.ConnectRPCServer(in)
-	if err != nil {
+
+	if err := proxyclient.ConnectRPCServer(in); err != nil {
 		loginfo.Println(err)
 		os.Exit(1)
 	}

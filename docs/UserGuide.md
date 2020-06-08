@@ -17,17 +17,17 @@ you can find the download links from [release notes](https://github.com/intel/rm
 
 ### Setup configuration file
 
-RMD has some default configurations, you may also find some configure file
-example from this [samples](../etc/rmd).
+RMD has some default configurations, you may also find some configure file example from this [samples](../etc/rmd).
 
-Most of the configuration files are in [TOML](https://github.com/toml-lang/toml) format.
-Users can create their own configuration files by referring the following
-sample. And RMD also provides the script(cmd/gen_conf.go) to generate it
-by probing the local host platform capabilities for proper CachePool settings.
+Most of the configuration files are in [TOML](https://github.com/toml-lang/toml) format. Users can create their own configuration files by referring the following sample. Also RMD provides the config generation tool (*gen_conf*) that creates sample config file with correct CachePool settings based on data captured by probing the local host platform capabilities.
 
+<<<<<<< HEAD
 RMD will try to search `/etc/rmd` to find
 configure files, put configuration files into these directory or RMD will
 use default configurations.
+=======
+RMD will try to search `/usr/local/etc/rmd`, `/etc/rmd`, `./etc/rmd` to find configure files, put configuration files into these directory or RMD will use default configurations.
+>>>>>>> Loadable plugins support added
 
 Default location for main RMD configuration file is: /etc/rmd/rmd.toml
 
@@ -82,32 +82,6 @@ besteffort: 0011 1111 1000 0000 0000
 shared:     1100 0000 0000 0000 0000
 ```
 
-#### P-State module configuration and usage
-
-P-State module is designed to change CPU core frequency based on it's load defined as a branch prediction miss/hits ratio.
-If current branch ratio is higher than selected threshold then CPU core frequency is set to predefined maximal value (can be CPU max frequency).
-When branch ratio on given core falls below the selected threshold then core frequency is set to minimal.
-
-Below extract from main configuration file (*rmd.toml*) presents sample configuration for optional P-State module.
-
-```
-[pstate]
-## Simple plugin enable/disable flag
-enabled = true
-## path to loadable plugin file (.so library) with P-State implementation
-path = "/etc/rmd/plugins/pstatelib.so"
-## port number with plugin's http server (REST API)
-port = 8080
-```
-
-This module is not an integral part of RMD binary but a loadable external plugin. To have P-State module working it is necessary to add section from above to *rmd.toml* and also provide *.so* file with plugin implementation.
-
-While providing plugin binary and setting the ***path*** it is crucial to remember that this location (thus this file) has to be readable for both *root* and *rmd* user. Otherwise RMD processes will not be able to load and use plugin library.
-
-If ***enabled*** flag is set to *false* plugin file existence will not be checked and plugin will not be loaded (even if exists).
-
-***port*** is the number of listening port where branch_monitor's http server with REST API is available.
-
 ### Prepare the credentials
 
 For security considerations, RMD daemon runs the RESTful API service as a
@@ -140,6 +114,34 @@ several things by themselves.
     $ sudo /usr/share/rmd/setup_rmd_users.sh
     ```
     *Note: Only root user can setup or access users in Berkeley database*
+
+### Overwriting configuration parameters
+
+Some configuration params set in *rmd.toml* can be easily changed during RMD start without need of editing input files. RMD accepts set of command line parameters that allows to overwrite some settings for current launch. List of all possible RMD parameters cane be obtained using *--help* RMD option:
+
+```shell
+sudo rmd --help
+```
+
+and is show in table below:
+
+| Option (short) | Option (long) | Description |
+| ---: | :---: | :--- |
+|    | --address \<string\> | Listen address (default "localhost") |
+|    | --alsologtostderr | Log to standard error as well as files |
+|    | --clientauth \<string\> | The policy the server will follow for TLS Client Authentication (default "challenge") |
+|    | --conf-dir \<string\> | Directory of config file |
+| -d | --debug | Enable debug |
+|    | --debugport \<int\> | Debug listen port (default 8081) |
+|    | --log-backtrace-at *traceLocation* | when logging hits line file:N, emit a stack trace (default :0) |
+|    | --log-dir \<string\> | If non-empty, write log files in this directory |
+|    | --logtostderr | log to standard error instead of files |
+|    | --stderrthreshold *severity* | logs at or above this threshold go to stderr (default 2) |
+|    | --tlsport \<int\> | TLS listen port (default 8443) |
+|    | --unixsock \<string\> | Unix sock file path |
+| -v | --v *Level* | log level for V logs |
+|    | --version | Print RMD version |
+|    | --vmodule *moduleSpec* | comma-separated list of pattern=N settings for file-filtered logging |
 
 ## Run in docker container
 
@@ -199,78 +201,110 @@ The task(s)/CPU(s) will be verified, otherwise RMD will fail your request.
 
 Besides you need to specify what policy of the workload will be used.
 
-Depending on available modules the payload body can contain only Cache related params:
+If there's no available plugins (loadable modules) the payload body can contain only *cache* related params:
 
 ```json
 {
     "task_ids": [ "A validate task id list" ],
     "core_ids": [ "cpu core list, for the topology, check cache information" ],
     "policy": "pre-defined policy in RMD",
-    "cache" : {
-        "max": "maximum cache ways which can be benefited",
-        "min": "minmum cache ways which can be benefited"
+    "rdt" : {
+        "cache" : {
+            "max" : "maximum cache ways which can be benefited",
+            "min" : "minimum cache ways which can be benefited"
+        }
     }
 }
 ```
 
-or also P-State params
+or *cache* and *mba* if MBA (Memory Bandwidth Allocation) support is available on platform:
 
 ```json
 {
     "task_ids": [ "A validate task id list" ],
     "core_ids": [ "cpu core list, for the topology, check cache information" ],
     "policy": "pre-defined policy in RMD",
-    "cache" : {
-        "max": "maximum cache ways which can be benefited",
-        "min": "minmum cache ways which can be benefited"
+    "rdt" : {
+        "cache" : {
+            "max" : "maximum cache ways which can be benefited",
+            "min" : "minimum cache ways which can be benefited"
+        },
+        "mba" : {
+            "percentage" : "MBA assignment in percents"
+        }
+    }
+}
+```
+
+If some additional plugins are loaded (like *pstate* - external plugin shipped separately) necessary params should be placed in *plugins* section:
+
+```json
+{
+    "task_ids": [ "A validate task id list" ],
+    "core_ids": [ "cpu core list, for the topology, check cache information" ],
+    "policy": "pre-defined policy in RMD",
+    "rdt" : {
+        "cache" : {
+            "max" : "maximum cache ways which can be benefited",
+            "min" : "minimum cache ways which can be benefited"
+        },
+        "mba" : {
+            "percentage" : "MBA assignment in percents"
+        }
     },
-    "pstate" : {
-        "ratio": "P-State branch ratio",
-        "monitoring": "core(s) monitoring (on or off)"
+    "plugins": {
+        "pstate" : {
+            "ratio": "P-State branch ratio",
+            "monitoring": "core(s) monitoring (on or off)"
+        }
     }
 }
 ```
 
-For more information about enabling P-State module see [this section](#p-state-module-configuration-and-usage).
+For more information about enabling additional modules see *ConfigurationGuide* from RMD documentation.
 
-Policy (if defined) has higher priority than manually specified params. If policy given
-in workload creation request then max_cache, min_cache, pstate_br and monitoring are not
-needed (ignored if provided).
+Policy (if defined) has higher priority than manually specified params. If policy given in a workload creation request then parameters for RDT module (like *rdt:cache:max* and *rdt:cache:min*) and parameters for all plugins (inside *plugins* section) are not needed and ignored if provided.
 
 An example:
 
-1) Create a workload with gold policy, let say you have a running process
-with process id `78377`
+1) Create a workload with gold policy for running process with process id `78377`:
 
 ```shell
 $ curl -H "Content-Type: application/json" --request POST --data \
-         '{"task_ids":["78377"],
-           "policy": "gold"}' \
-         http://127.0.0.1:8081/v1/workloads
+        '{"task_ids":["78377"],
+            "policy": "gold"
+        }' \
+        http://127.0.0.1:8081/v1/workloads
 ```
 
-2) Create workload with manually specified parameters without P-State plugin data.
+2) Create workload with manually specified cache parameters:
 
 ```shell
 $ curl -H "Content-Type: application/json" --request POST --data \
-         '{"task_ids" : ["78377"],
-           "cache" : {"max": 4, "min": 4 } }' \
-         http://127.0.0.1:8081/v1/workloads
+        '{"task_ids" : ["78377"],
+            "rdt" : {
+                "cache" : {"max": 4, "min": 4 }
+            }
+        }' \
+        http://127.0.0.1:8081/v1/workloads
 ```
 
-Please note that it is not allowed (and treated as error) to provide *pstate* parameters section if P-State plugin not enabled in configuration.
+Please note that it is not allowed (and treated as error) to provide parameters section for plugin that is not loaded (not enabled and properly configured in *rmd.toml*).
 
-3) Create workload with manually specified parameters with P-State plugin enabled
+3) Create workload with manually specified parameters for Cache and enabled P-State plugin:
 
 ```shell
 $ curl -H "Content-Type: application/json" --request POST --data \
-         '{"task_ids" : ["78377"],
-           "cache" : {"max": 4, "min": 4 },
-           "pstate" : {"ratio": 3.0, "monitoring" : "on"} }' \
-         http://127.0.0.1:8081/v1/workloads
+        '{"task_ids" : ["78377"],
+            "rdt": {
+                "cache" : {"max": 4, "min": 4 },
+            },
+            "plugins" : {
+                "pstate" : {"ratio": 3.0, "monitoring" : "on"}
+            }
+        }' \
+        http://127.0.0.1:8081/v1/workloads
 ```
-
-Last param, *monitoring*, can be omitted when defining *ratio* and then the default value "on" will be used.
 
 3) Delete a workload by the workload id, you will find it from the
 output of the create response.

@@ -4,10 +4,11 @@ package integration_test
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"net/http"
 	"os"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
 	testhelpers "github.com/intel/rmd/test/test_helpers"
 	util "github.com/intel/rmd/utils/bitmap"
@@ -113,6 +114,10 @@ func verifyWrokload(he *httpexpect.Expect, data map[string]interface{}, isMbaSup
 
 	fmt.Println("Response :", repobj)
 	fmt.Println("CACHE: ", repobj.Value("rdt").Object().Value("cache"), data["rdt"].(map[string]interface{})["cache"])
+	// print plugins only if used int data (so expected also in json result)
+	if plugs, ok := data["plugins"]; ok {
+		fmt.Println("PLUGINS: ", repobj.Value("plugins"), plugs)
+	}
 
 	workloadId := repobj.Value("id").String().Raw()
 	cosName := repobj.Value("cos_name").String().Raw()
@@ -124,6 +129,10 @@ func verifyWrokload(he *httpexpect.Expect, data map[string]interface{}, isMbaSup
 	if p, ok := data["policy"]; ok {
 		repobj.Value("policy").Equal(p)
 	} else {
+		// validate plugins only if used in data (so expected also in json result)
+		if plugs, ok := data["plugins"]; ok {
+			repobj.Value("plugins").Equal(plugs)
+		}
 		repobj.Value("rdt").Object().Value("cache").Equal(data["rdt"].(map[string]interface{})["cache"])
 		if isMbaSupported {
 			repobj.Value("rdt").Object().Value("mba").Equal(data["rdt"].(map[string]interface{})["mba"])
@@ -132,7 +141,7 @@ func verifyWrokload(he *httpexpect.Expect, data map[string]interface{}, isMbaSup
 
 	res, ok := resall[cosName]
 	if !ok {
-		Fail(fmt.Sprintf("Resource group %s was not created correctlly", cosName))
+		Fail(fmt.Sprintf("Resource group %s was not created correctly", cosName))
 	}
 
 	if tids, ok := data["task_ids"]; ok {

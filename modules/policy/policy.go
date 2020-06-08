@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/intel/rmd/utils"
+	util "github.com/intel/rmd/utils"
 	appConf "github.com/intel/rmd/utils/config"
 	"github.com/intel/rmd/utils/cpu"
 	log "github.com/sirupsen/logrus"
@@ -23,7 +23,7 @@ var supportedConfigType = map[string]int{
 // Param represents single policy attribute
 // example: "MaxCache: 4"
 //
-type Param map[string]string
+type Param map[string]interface{}
 
 // Module represents attributes for single module
 // example:

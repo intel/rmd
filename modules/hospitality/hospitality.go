@@ -61,14 +61,27 @@ func (h *Hospitality) GetByRequest(req *Request) error {
 				"Can not find Policy", err)
 		}
 		//get max cache
-		m, err := strconv.Atoi(tier["cache"]["max"])
-		if err != nil {
+		mAsInterface, ok := tier["cache"]["max"]
+		if !ok {
 			return rmderror.NewAppError(http.StatusInternalServerError,
 				"Error to get max cache", err)
 		}
+
+		m, ok := mAsInterface.(int)
+		if !ok {
+			return rmderror.NewAppError(http.StatusInternalServerError,
+				"Error to get max cache", err)
+		}
+
 		//get min cache
-		n, err := strconv.Atoi(tier["cache"]["min"])
-		if err != nil {
+		nAsInterface, ok := tier["cache"]["min"]
+		if !ok {
+			return rmderror.NewAppError(http.StatusInternalServerError,
+				"Error to get min cache", err)
+		}
+
+		n, ok := nAsInterface.(int)
+		if !ok {
 			return rmderror.NewAppError(http.StatusInternalServerError,
 				"Error to get min cache", err)
 		}
