@@ -351,7 +351,7 @@ func (c *Infos) GetByLevel(level uint32) error {
 						"Max cache doesn't exist in policy", err)
 				}
 
-				iMax, ok := iMaxAsInterface.(int)
+				iMax, ok := iMaxAsInterface.(int64)
 				if !ok {
 					log.Error("Failed to convert type for max cache")
 					return rmderror.NewAppError(http.StatusInternalServerError,
@@ -365,14 +365,14 @@ func (c *Infos) GetByLevel(level uint32) error {
 					return rmderror.NewAppError(http.StatusInternalServerError,
 						"Min cache doesn't exist in policy", err)
 				}
-				iMin, ok := iMinAsInterface.(int)
+				iMin, ok := iMinAsInterface.(int64)
 				if !ok {
 					log.Error("Failed to convert type for min cache")
 					return rmderror.NewAppError(http.StatusInternalServerError,
 						"Failed to convert type for min cache", err)
 				}
 
-				err = getAvailablePolicyCount(availPolicy, iMax, iMin, allres, policyName, cacheLevel, sc.ID)
+				err = getAvailablePolicyCount(availPolicy, int(iMax), int(iMin), allres, policyName, cacheLevel, sc.ID)
 				if err != nil {
 					log.Errorf("Failed to get available policy count. Reason: %s", err.Error())
 					return rmderror.AppErrorf(http.StatusInternalServerError,

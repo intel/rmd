@@ -21,13 +21,7 @@ RMD has some default configurations, you may also find some configure file examp
 
 Most of the configuration files are in [TOML](https://github.com/toml-lang/toml) format. Users can create their own configuration files by referring the following sample. Also RMD provides the config generation tool (*gen_conf*) that creates sample config file with correct CachePool settings based on data captured by probing the local host platform capabilities.
 
-<<<<<<< HEAD
-RMD will try to search `/etc/rmd` to find
-configure files, put configuration files into these directory or RMD will
-use default configurations.
-=======
-RMD will try to search `/usr/local/etc/rmd`, `/etc/rmd`, `./etc/rmd` to find configure files, put configuration files into these directory or RMD will use default configurations.
->>>>>>> Loadable plugins support added
+RMD will try to search `/etc/rmd` to find configure files, put configuration files into these directory or RMD will use default configurations.
 
 Default location for main RMD configuration file is: /etc/rmd/rmd.toml
 
@@ -155,6 +149,29 @@ $ sudo docker run  --privileged -v /proc:/proc \
         -v /sys/fs/resctrl:/sys/fs/resctrl:rw \
         --address 0.0.0.0
 ```
+
+## Enable OpenStack integration
+
+RMD is prepared to be controlled by OpenStack but by default this feature is disabled at build process level.
+
+To enable OpenStack integration user has to build RMD binary with additional flag:
+
+```shell
+$ make BUILD_TYPE=openstack
+```
+
+This flag has impact on both RMD and gen_conf binary to provide proper sample config generation. Same flag should be used to launch OpenStack tests:
+
+```shell
+$ make BUILD_TYPE=openstack test-unit
+```
+
+OpenStack related configuration consist of two parts:
+
+* *openstackenable* flag in *[default]* section
+* *[openstack]* section with full configuration
+
+Please see sample *rmd.toml* in etc/rmd subfolder of RMD repo for more details.
 
 ## Run the service
 

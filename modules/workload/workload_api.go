@@ -116,7 +116,7 @@ func GetByID(request *restful.Request, response *restful.Response) {
 // sample POST request data
 // body : '{ "core_ids" : ["1","2"], "policy": "gold" }'
 // body : '{ "task_ids" : ["123"], "policy" : "silver" }'
-// body : '{ "core_ids" : ["123"], "cache" : { "max" : 4, "min": 2 }, pstate : { "ratio": 3.0, "monitoring" : true } }
+// body : '{ "core_ids" : ["123"], "rdt" : { "cache" : { "max" : 4, "min": 2 } } }
 func NewWorkload(request *restful.Request, response *restful.Response) {
 	// workload only to return to the user with no backend params
 	userWl := new(wltypes.UserRDTWorkLoad)
@@ -127,7 +127,8 @@ func NewWorkload(request *restful.Request, response *restful.Response) {
 	log.Infof("Try to create workload %v", userWl)
 	if err != nil {
 		response.AddHeader("Content-Type", "text/plain")
-		response.WriteErrorString(http.StatusInternalServerError, err.Error())
+		response.WriteErrorString(http.StatusInternalServerError, "Failed to read request correctly. Please check request syntax and data")
+		log.Errorf("Failed to read request due to: %v", err.Error())
 		return
 	}
 

@@ -59,7 +59,7 @@ if [ "$1" == "-u" ]; then
 fi
 
 if [ "$1" != "-i" -a "$1" != "-s" ]; then
-    go test $GOBUILDOPTS -short -v -cover "$DIRS_TO_TEST"
+    go test $GOBUILDOPTS -short -v -cover $DIRS_TO_TEST
 fi
 cd -
 

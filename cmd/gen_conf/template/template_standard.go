@@ -24,8 +24,6 @@ var Options = map[string]interface{}{
 	"policypath":          "/etc/rmd/policy.toml",
 	"sysresctrl":          "/sys/fs/resctrl",
 	"plugins":             "",
-	"pstate_plugin_path":  "/etc/rmd/plugins/pstatelib.so",
-	"pstate_port":         8080,
 	"dbValidatorInterval": 30, //seconds
 }
 
@@ -88,9 +86,4 @@ usercert = "/etc/rmd/acl/roles/user/" # A cert is used to describe user info. Th
 [pam]
 service = "rmd"
 
-[pstate]
-## path to loadable plugin file (.so library) with P-State implementation
-path = "{{.pstate_plugin_path}}"
-## port number with plugin's http server (REST API)
-port = {{.pstate_port}}
 `

@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"errors"
+	"fmt"
 
 	logger "github.com/sirupsen/logrus"
 )
@@ -17,7 +18,7 @@ func Enforce(moduleName string, params map[string]interface{}) (string, error) {
 	logger.Debugf("Enforce() requested for %v plugin", moduleName)
 	iface, ok := Interfaces[moduleName]
 	if !ok {
-		return "", errors.New("Selected plugin is not loaded")
+		return "", fmt.Errorf("Plugin '%v' is not loaded", moduleName)
 	}
 	if iface == nil {
 		return "", errors.New("Internal error: nil pointer to plugin")
@@ -33,7 +34,7 @@ func Release(moduleName string, params map[string]interface{}) error {
 	logger.Debugf("Release() requested for %v plugin", moduleName)
 	iface, ok := Interfaces[moduleName]
 	if !ok {
-		return errors.New("Selected plugin is not loaded")
+		return fmt.Errorf("Plugin '%v' is not loaded", moduleName)
 	}
 	if iface == nil {
 		return errors.New("Internal error: nil pointer to plugin")
@@ -49,7 +50,7 @@ func Validate(moduleName string, params map[string]interface{}) error {
 	logger.Debugf("Validate() requested for %v plugin", moduleName)
 	iface, ok := Interfaces[moduleName]
 	if !ok {
-		return errors.New("Selected plugin is not loaded")
+		return fmt.Errorf("Plugin '%v' is not loaded", moduleName)
 	}
 	if iface == nil {
 		return errors.New("Internal error: nil pointer to plugin")

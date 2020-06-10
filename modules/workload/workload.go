@@ -64,12 +64,12 @@ func fillWorkloadByPolicy(wrkld *wltypes.RDTWorkLoad) error {
 	var errMin error
 
 	// check and copy cache data
-	maxCache, ok := policy["cache"]["max"].(int)
+	maxCache, ok := policy["cache"]["max"].(int64)
 	if !ok {
 		errMax = fmt.Errorf("Failed to convert type for max cache")
 	}
 
-	minCache, ok := policy["cache"]["min"].(int)
+	minCache, ok := policy["cache"]["min"].(int64)
 	if !ok {
 		errMin = fmt.Errorf("Failed to convert type for min cache")
 	}
@@ -86,7 +86,7 @@ func fillWorkloadByPolicy(wrkld *wltypes.RDTWorkLoad) error {
 	}
 
 	// check and copy MBA data
-	valMba, ok := policy["mba"]["percentage"].(int)
+	valMba, ok := policy["mba"]["percentage"].(int64)
 	if ok {
 		wrkld.Rdt.Mba.Percentage = new(uint32)
 		*wrkld.Rdt.Mba.Percentage = uint32(valMba)
@@ -477,8 +477,10 @@ func Enforce(w *wltypes.RDTWorkLoad) error {
 		}
 	}
 	// Enforce the Cache and MBA params into the resctrl
-	if err := enforceRDT(w, er, rdtenforce); err != nil {
-		return err
+	if er.UseMba || er.UseCache {
+		if err := enforceRDT(w, er, rdtenforce); err != nil {
+			return err
+		}
 	}
 
 	for module, params := range w.Plugins {
@@ -879,14 +881,14 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 				"Could not find the Policy.", err)
 		}
 
-		maxWays, okMax := policy["cache"]["max"].(int)
+		maxWays, okMax := policy["cache"]["max"].(int64)
 		if !okMax {
 			log.Error("Max cache reading error - cache way assignment will be skipped")
 		} else {
 			req.MaxWays = uint32(maxWays)
 		}
 
-		minWays, okMin := policy["cache"]["min"].(int)
+		minWays, okMin := policy["cache"]["min"].(int64)
 		if !okMin {
 			log.Error("Min cache reading error - cache way assignment will be skipped")
 		} else {
