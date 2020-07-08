@@ -8,8 +8,8 @@ import (
 )
 
 // GetResAssociation returns all resource group association
-func GetResAssociation() map[string]*resctrl.ResAssociation {
-	return resctrl.GetResAssociation()
+func GetResAssociation(availableCLOS []string) map[string]*resctrl.ResAssociation {
+	return resctrl.GetResAssociation(availableCLOS)
 }
 
 // GetRdtCosInfo returns RDT information
@@ -24,6 +24,7 @@ func IsIntelRdtMounted() bool {
 
 // Commit resctrl.ResAssociation with given name
 func Commit(r *resctrl.ResAssociation, name string) error {
+	// fmt.Println("CLient Side Commit : ", name, r)
 	// TODO how to get error reason
 	req := types.ResctrlRequest{
 		Name: name,

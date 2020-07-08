@@ -197,8 +197,11 @@ func parserResAssociation(basepath string, ignore []string, ps map[string]*ResAs
 // That need cgo, please ref:
 // https://gist.github.com/ericchiang/ce0fdcac5659d0a80b38
 // now we can use lib/flock/flock.go
-func GetResAssociation() map[string]*ResAssociation {
+func GetResAssociation(availableCLOS []string) map[string]*ResAssociation {
 	ignore := []string{"info", "mon_data", "mon_groups"}
+	if availableCLOS != nil {
+		ignore = append(ignore, availableCLOS...)
+	}
 	ress := make(map[string]*ResAssociation)
 	filepath.Walk(SysResctrl, parserResAssociation(SysResctrl, ignore, ress))
 	return ress
@@ -212,30 +215,32 @@ func GetResAssociation() map[string]*ResAssociation {
 // After some test on taskFlow, we can remove these logic code and use taskFlow.
 // The taskFlow need a snapshot of all ResAssociation for the transaction.
 // It can be gotten by GetResAssociation.
-func Commit(r *ResAssociation, group string) error {
-	if !IsIntelRdtMounted() {
-		return fmt.Errorf("Can't apply this association, for resctrl is not mounted")
-	}
 
-	return taskFlow(group, r, GetResAssociation())
-}
+// func Commit(r *ResAssociation, group string) error {
+// 	if !IsIntelRdtMounted() {
+// 		return fmt.Errorf("Can't apply this association, for resctrl is not mounted")
+// 	}
+
+// 	return taskFlow(group, r, GetResAssociation())
+// }
 
 // CommitAll change all resource group
 // FIXME need to catch error
-func CommitAll(mRes map[string]*ResAssociation) error {
-	ress := GetResAssociation()
-	for name, res := range mRes {
-		Commit(res, name)
-	}
 
-	// Golang does not support set difference
-	for name := range ress {
-		if _, ok := mRes[name]; !ok && name != "." {
-			DestroyResAssociation(name)
-		}
-	}
-	return nil
-}
+// func CommitAll(mRes map[string]*ResAssociation) error {
+// 	ress := GetResAssociation()
+// 	for name, res := range mRes {
+// 		Commit(res, name)
+// 	}
+
+// 	// Golang does not support set difference
+// 	for name := range ress {
+// 		if _, ok := mRes[name]; !ok && name != "." {
+// 			DestroyResAssociation(name)
+// 		}
+// 	}
+// 	return nil
+// }
 
 // RdtCosInfo is from /sys/fs/resctrl/info
 type RdtCosInfo struct {
@@ -422,4 +427,24 @@ func RemoveTasks(tasks []string) error {
 		err = writeFile(SysResctrl, "tasks", v)
 	}
 	return err
+}
+
+func GetNumOfCLOS() (int, error) {
+	f, err := os.Open(SysResctrl + "/info/L3/num_closids")
+	if err != nil {
+		return -1, err
+	}
+	defer f.Close()
+
+	s := bufio.NewScanner(f)
+	var text string
+	for s.Scan() {
+		text = s.Text()
+	}
+	// fmt.Println("text read: ", text)
+	numClos, ok := strconv.Atoi(text)
+	if ok != nil {
+		return -1, ok
+	}
+	return numClos,nil;
 }

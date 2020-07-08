@@ -14,9 +14,10 @@ import (
 	util "github.com/intel/rmd/utils/bitmap"
 	"github.com/intel/rmd/utils/proc"
 	"github.com/intel/rmd/utils/resctrl"
+	"github.com/intel/rmd/utils/pqos"
 )
 
-var groupName = "infra"
+var groupName = "COS1"
 
 var infraGroupReserve = &Reserved{}
 var infraOnce sync.Once
@@ -113,8 +114,8 @@ func SetInfraGroup() error {
 	level := GetLLC()
 	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
 	ways := GetCosInfo().CbmMaskLen
-
-	allres := proxyclient.GetResAssociation()
+	// []string {"COS2", "COS3", "COS4", "COS5", "COS6", "COS7", "COS8", "COS9", "COS10", "COS11", "COS12", "COS13", "COS14", "COS15"}
+	allres := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
 	infraGroup, ok := allres[groupName]
 	if !ok {
 		infraGroup = resctrl.NewResAssociation()

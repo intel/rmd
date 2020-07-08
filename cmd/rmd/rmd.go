@@ -21,6 +21,7 @@ import (
 	"github.com/intel/rmd/utils/log"
 	logconf "github.com/intel/rmd/utils/log/config"
 	"github.com/intel/rmd/utils/pidfile"
+	"github.com/intel/rmd/utils/pqos"
 	"github.com/intel/rmd/utils/proc"
 	"github.com/intel/rmd/utils/resctrl"
 	"github.com/intel/rmd/version"
@@ -38,6 +39,14 @@ func main() {
 	if pflag.Lookup("version").Value.String() == "true" {
 		fmt.Printf("RMD version: %s (%s)\n", version.Info["version"], version.Info["revision"])
 		os.Exit(0)
+	}
+
+	if os.Geteuid() == 0 {
+		// PQOS initialization should be performed only in root process
+		if err := pqos.Init(); err != nil {
+			fmt.Println("PQOS initialization failed:", err)
+			os.Exit(1)
+		}
 	}
 
 	if err := appconf.Init(); err != nil {

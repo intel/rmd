@@ -226,7 +226,7 @@ func (c *Infos) GetByLevel(level uint32) error {
 
 	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
 
-	allres := resctrl.GetResAssociation()
+	allres := resctrl.GetResAssociation(nil)
 	av, err := GetAvailableCacheSchemata(allres, []string{"infra"}, "none", cacheLevel)
 	if err != nil {
 		return rmderror.AppErrorf(http.StatusInternalServerError,
@@ -326,7 +326,7 @@ func (c *Infos) GetByLevel(level uint32) error {
 
 			cpuPools, _ := GetCPUPools()
 			var defaultCpus *util.Bitmap
-			if resAssoc, ok := resctrl.GetResAssociation()["."]; ok == true && resAssoc != nil {
+			if resAssoc, ok := resctrl.GetResAssociation(nil)["."]; ok == true && resAssoc != nil {
 				defaultCpus, _ = BitmapsCPUWrapper(resAssoc.CPUs)
 			}
 			if item, ok := cpuPools["all"][sc.ID]; ok {
@@ -351,7 +351,7 @@ func (c *Infos) GetByLevel(level uint32) error {
 						"Max cache doesn't exist in policy", err)
 				}
 
-				iMax, ok := iMaxAsInterface.(int64)
+				iMax, ok := iMaxAsInterface.(int)
 				if !ok {
 					log.Error("Failed to convert type for max cache")
 					return rmderror.NewAppError(http.StatusInternalServerError,
@@ -365,14 +365,14 @@ func (c *Infos) GetByLevel(level uint32) error {
 					return rmderror.NewAppError(http.StatusInternalServerError,
 						"Min cache doesn't exist in policy", err)
 				}
-				iMin, ok := iMinAsInterface.(int64)
+				iMin, ok := iMinAsInterface.(int)
 				if !ok {
 					log.Error("Failed to convert type for min cache")
 					return rmderror.NewAppError(http.StatusInternalServerError,
 						"Failed to convert type for min cache", err)
 				}
 
-				err = getAvailablePolicyCount(availPolicy, int(iMax), int(iMin), allres, policyName, cacheLevel, sc.ID)
+				err = getAvailablePolicyCount(availPolicy, iMax, iMin, allres, policyName, cacheLevel, sc.ID)
 				if err != nil {
 					log.Errorf("Failed to get available policy count. Reason: %s", err.Error())
 					return rmderror.AppErrorf(http.StatusInternalServerError,

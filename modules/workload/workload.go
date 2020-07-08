@@ -20,6 +20,7 @@ import (
 	"github.com/intel/rmd/modules/cache"
 	"github.com/intel/rmd/utils/cpu"
 	"github.com/intel/rmd/utils/resctrl"
+	"github.com/intel/rmd/utils/pqos"
 
 	libutil "github.com/intel/rmd/utils/bitmap"
 	"github.com/intel/rmd/utils/proc"
@@ -64,12 +65,12 @@ func fillWorkloadByPolicy(wrkld *wltypes.RDTWorkLoad) error {
 	var errMin error
 
 	// check and copy cache data
-	maxCache, ok := policy["cache"]["max"].(int64)
+	maxCache, ok := policy["cache"]["max"].(int)
 	if !ok {
 		errMax = fmt.Errorf("Failed to convert type for max cache")
 	}
 
-	minCache, ok := policy["cache"]["min"].(int64)
+	minCache, ok := policy["cache"]["min"].(int)
 	if !ok {
 		errMin = fmt.Errorf("Failed to convert type for min cache")
 	}
@@ -86,7 +87,7 @@ func fillWorkloadByPolicy(wrkld *wltypes.RDTWorkLoad) error {
 	}
 
 	// check and copy MBA data
-	valMba, ok := policy["mba"]["percentage"].(int64)
+	valMba, ok := policy["mba"]["percentage"].(int)
 	if ok {
 		wrkld.Rdt.Mba.Percentage = new(uint32)
 		*wrkld.Rdt.Mba.Percentage = uint32(valMba)
@@ -233,10 +234,15 @@ func validate(w *wltypes.RDTWorkLoad) error {
 
 func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *wltypes.RDTEnforce) error {
 
-	resaall := proxyclient.GetResAssociation()
+	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
+
+	// log.Println("Resall : ", resaall)
 
 	targetLev := strconv.FormatUint(uint64(cache.GetLLC()), 10)
-	av, err := cache.GetAvailableCacheSchemata(resaall, []string{"infra", "."}, er.Type, "L"+targetLev)
+	// log.Printf("targetLev",targetLev)
+	// []string{"COS1", "COS0"}
+	av, err := cache.GetAvailableCacheSchemata(resaall, []string{"COS1", "."}, er.Type, "L"+targetLev)
+	// log.Printf("av",*av["0"],*av["1"])
 	if err != nil {
 		return rmderror.AppErrorf(http.StatusInternalServerError,
 			"Unable to read cache schemata; %s", err.Error())
@@ -260,6 +266,7 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce
 			// TODO
 			// candidate[k] = v.GetBestMatchConnectiveBits(er.MaxWays, 0, true)
 			candidate[k] = v.GetConnectiveBits(er.MaxWays, 0, false)
+			// log.Printf("getbits",candidate[k])
 		case cache.Besteffort:
 			// Always to try to allocate max cache ways, if fail try to
 			// get the most available ones
@@ -331,9 +338,9 @@ func enforceMba(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 	if er.UseCache {
 		availableSchemata = rdtenforce.AvailableSchemata
 	} else {
-		resaall := proxyclient.GetResAssociation()
+		resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
 		targetLev := strconv.FormatUint(uint64(cache.GetLLC()), 10)
-		availableSchemata, err = cache.GetAvailableCacheSchemata(resaall, []string{"infra", "."}, "none", "L"+targetLev)
+		availableSchemata, err = cache.GetAvailableCacheSchemata(resaall, []string{"COS1", "."}, "none", "L"+targetLev)
 		if err != nil {
 			return rmderror.AppErrorf(http.StatusInternalServerError,
 				"Unable to read cache schemata; %s", err.Error())
@@ -373,7 +380,7 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 	// If cache is used
 	if er.UseCache {
 		if er.Type == cache.Shared {
-			grpName = reserved[cache.Shared].Name
+			grpName = pqos.RecentlyOccupiedCLOS()
 			if res, ok := resaall[grpName]; !ok {
 				resAss = newResAss(candidateCache, targetLev)
 			} else {
@@ -382,9 +389,9 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 		} else {
 			resAss = newResAss(candidateCache, targetLev)
 			if len(w.TaskIDs) > 0 {
-				grpName = strings.Join(w.TaskIDs, "_") + "-" + er.Type
+				grpName = pqos.RecentlyOccupiedCLOS()
 			} else if len(w.CoreIDs) > 0 {
-				grpName = strings.Join(w.CoreIDs, "_") + "-" + er.Type
+				grpName = pqos.RecentlyOccupiedCLOS()
 			}
 		}
 	}
@@ -394,12 +401,12 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 			grpName = reserved[cache.Shared].Name
 		} else {
 			if er.Type == cache.Besteffort {
-				grpName = strings.Join(w.TaskIDs, "_") + "-" + er.Type
+				grpName = pqos.RecentlyOccupiedCLOS()
 			} else {
 				if len(w.TaskIDs) > 0 {
-					grpName = strings.Join(w.TaskIDs, "_") + "-" + "guarantee"
+					grpName = pqos.RecentlyOccupiedCLOS()
 				} else if len(w.CoreIDs) > 0 {
-					grpName = strings.Join(w.CoreIDs, "_") + "-" + "guarantee"
+					grpName = pqos.RecentlyOccupiedCLOS()
 				}
 			}
 		}
@@ -424,6 +431,8 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 			"Error to commit resource group for workload.", err)
 	}
 
+	// log.Println("Changed Res : ",changedRes)
+
 	// loop to change shrunk resource
 	// TODO: there's corners if there are multiple changed resource groups,
 	// but we failed to commit one of them (worest case is the last group),
@@ -438,6 +447,8 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 				"Error to shrink resource group", err)
 		}
 	}
+
+	pqos.UpdateAvailableCLOS()
 
 	// reset os group
 	if err = cache.SetOSGroup(); err != nil {
@@ -455,6 +466,8 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 // Enforce a user request workload based on defined policy
 func Enforce(w *wltypes.RDTWorkLoad) error {
 	w.Status = wltypes.Failed
+
+	pqos.OccupyCLOS()
 
 	l.Lock()
 	defer l.Unlock()
@@ -518,7 +531,7 @@ func Release(w *wltypes.RDTWorkLoad) error {
 	l.Lock()
 	defer l.Unlock()
 
-	resaall := proxyclient.GetResAssociation()
+	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
 
 	r, ok := resaall[w.CosName]
 
@@ -728,7 +741,7 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 
 	l.Lock()
 	defer l.Unlock()
-	resaall := proxyclient.GetResAssociation()
+	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
 
 	if !reflect.DeepEqual(patched.CoreIDs, w.CoreIDs) ||
 		!reflect.DeepEqual(patched.TaskIDs, w.TaskIDs) {
@@ -881,14 +894,14 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 				"Could not find the Policy.", err)
 		}
 
-		maxWays, okMax := policy["cache"]["max"].(int64)
+		maxWays, okMax := policy["cache"]["max"].(int)
 		if !okMax {
 			log.Error("Max cache reading error - cache way assignment will be skipped")
 		} else {
 			req.MaxWays = uint32(maxWays)
 		}
 
-		minWays, okMin := policy["cache"]["min"].(int64)
+		minWays, okMin := policy["cache"]["min"].(int)
 		if !okMin {
 			log.Error("Min cache reading error - cache way assignment will be skipped")
 		} else {
@@ -924,6 +937,8 @@ func newResAss(r map[string]*libutil.Bitmap, level string) *resctrl.ResAssociati
 	newResAss.CacheSchemata = make(map[string][]resctrl.CacheCos)
 
 	targetLev := "L" + level
+
+	// fmt.Println("newResAss : ", r)
 
 	for k, v := range r {
 		cacheID, _ := strconv.Atoi(k)
@@ -1145,6 +1160,7 @@ func Init() error {
 	if err != nil {
 		return err
 	}
+	pqos.StartCLOSPool()
 	return err
 }
 

@@ -108,7 +108,7 @@ func (h *Hospitality) GetByRequestMaxMin(max, min uint32, cacheIDuint *uint32, t
 			"Bad request, max_cache=%d, min_cache=%d", max, min)
 	}
 
-	resaall := proxyclient.GetResAssociation()
+	resaall := proxyclient.GetResAssociation(nil)
 
 	av, err := cache.GetAvailableCacheSchemata(resaall, []string{"infra", "."}, reqType, "L"+targetLev)
 	if err != nil && !strings.Contains(err.Error(), "error doesn't support pool") {

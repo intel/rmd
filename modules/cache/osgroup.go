@@ -8,6 +8,7 @@ import (
 	proxyclient "github.com/intel/rmd/internal/proxy/client"
 	"github.com/intel/rmd/modules/cache/config"
 	util "github.com/intel/rmd/utils/bitmap"
+	"github.com/intel/rmd/utils/pqos"
 )
 
 var osGroupReserve = &Reserved{}
@@ -75,7 +76,8 @@ func SetOSGroup() error {
 		return err
 	}
 
-	allres := proxyclient.GetResAssociation()
+	allres := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
+	// fmt.Println("All res 2nd Commit : ", allres)
 	osGroup := allres["."]
 	originBM, err := BitmapsCPUWrapper(osGroup.CPUs)
 	if err != nil {
@@ -88,7 +90,7 @@ func SetOSGroup() error {
 
 	level := GetLLC()
 	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
-	schemata, err := GetAvailableCacheSchemata(allres, []string{"infra", "."}, "none", cacheLevel)
+	schemata, err := GetAvailableCacheSchemata(allres, []string{"COS1", "."}, "none", cacheLevel)
 	if err != nil {
 		return err
 	}
