@@ -9,6 +9,7 @@ import (
 	"github.com/intel/rmd/modules/cache/config"
 	util "github.com/intel/rmd/utils/bitmap"
 	"github.com/intel/rmd/utils/pqos"
+	"github.com/intel/rmd/utils/proc"
 )
 
 var osGroupReserve = &Reserved{}
@@ -79,6 +80,22 @@ func SetOSGroup() error {
 	allres := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
 	// fmt.Println("All res 2nd Commit : ", allres)
 	osGroup := allres["."]
+	// Removing "MB" from the Cache Schemata because it causes error while writing Mbps value
+	// Resctrl bug: approximates(takes the ceil) the given value. When MBA mbps max value given
+	// then it takes the ceil of the value and it goes off range. Hence deleting default MBA values.
+	_, ok := osGroup.CacheSchemata["MB"]
+	if ok {
+		for _, v := range osGroup.CacheSchemata["MB"] {
+			if v.Mask > strconv.Itoa(MaxMBAPercentage) {
+				proc.SetMbaMbpsMode(true)
+			} else {
+				proc.SetMbaMbpsMode(false)
+			}
+		}
+		delete(osGroup.CacheSchemata, "MB")
+	} else {
+		proc.SetMbaMbpsMode(false)
+	}
 	originBM, err := BitmapsCPUWrapper(osGroup.CPUs)
 	if err != nil {
 		return err

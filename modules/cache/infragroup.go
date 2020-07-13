@@ -122,6 +122,13 @@ func SetInfraGroup() error {
 		l := len(reserve.Schemata)
 		infraGroup.CacheSchemata[cacheLevel] = make([]resctrl.CacheCos, l, l)
 	}
+	// Removing "MB" from the Cache Schemata because it causes error while writing Mbps value
+	// Resctrl bug: approximates(takes the ceil) the given value. When MBA mbps max value given
+	// then it takes the ceil of the value and it goes off range. Hence deleting default MBA values.
+	_, ok = infraGroup.CacheSchemata["MB"]
+	if ok {
+		delete(infraGroup.CacheSchemata, "MB")
+	}
 	infraGroup.CPUs = reserve.AllCPUs.ToString()
 
 	for k, v := range reserve.Schemata {

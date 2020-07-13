@@ -33,17 +33,15 @@ import (
 	appConf "github.com/intel/rmd/utils/config"
 )
 
-const (
-	defaultMBAPercentage uint32 = 100
-)
-
 var l sync.Mutex
 
 // database for storing all active workloads
 var workloadDatabase db.DB
 
 // Flag to check if MBA and L3 CAT is supported
-var isMbaSupported, isL3CATSupported bool
+var isMbaSupported, isL3CATSupported, isMbaMbpsAvailable bool
+
+var mbaMaxValue, mbaValue uint32
 
 // reusable function for filling workload with policy-based params
 func fillWorkloadByPolicy(wrkld *wltypes.RDTWorkLoad) error {
@@ -65,12 +63,12 @@ func fillWorkloadByPolicy(wrkld *wltypes.RDTWorkLoad) error {
 	var errMin error
 
 	// check and copy cache data
-	maxCache, ok := policy["cache"]["max"].(int)
+	maxCache, ok := policy["cache"]["max"].(int64)
 	if !ok {
 		errMax = fmt.Errorf("Failed to convert type for max cache")
 	}
 
-	minCache, ok := policy["cache"]["min"].(int)
+	minCache, ok := policy["cache"]["min"].(int64)
 	if !ok {
 		errMin = fmt.Errorf("Failed to convert type for min cache")
 	}
@@ -133,26 +131,44 @@ func validate(w *wltypes.RDTWorkLoad) error {
 		}
 		// If MBA values are provided :
 		// 1. Check if its a Cache guaranteed request
-		// 2. Check if MBA value is range of 1 to 100
+		// 2. Check if MBA value is range of 1 to max
 		// 3. If any of the above fails then return error
-		if w.Rdt.Mba.Percentage != nil {
+		if isMbaSupported {
+			if isMbaMbpsAvailable {
+				if w.Rdt.Mba.Percentage != nil {
+					return fmt.Errorf("Please provide MBA in Mbps")
+				}
+				if w.Rdt.Mba.Mbps != nil {
+					mbaValue = *w.Rdt.Mba.Mbps
+				}
+			} else {
+				if w.Rdt.Mba.Mbps != nil {
+					return fmt.Errorf("Please provide MBA in Percentage")
+				}
+				if w.Rdt.Mba.Percentage != nil {
+					mbaValue = *w.Rdt.Mba.Percentage
+				}
+			}
+		}
+
+		if w.Rdt.Mba.Mbps != nil || w.Rdt.Mba.Percentage != nil {
 			if w.Rdt.Cache.Max != nil && w.Rdt.Cache.Min != nil &&
-				((*w.Rdt.Cache.Max != *w.Rdt.Cache.Min && *w.Rdt.Mba.Percentage != 100) ||
-					(*w.Rdt.Cache.Min == 0 && *w.Rdt.Cache.Max == 0 && *w.Rdt.Mba.Percentage != 100)) {
+				((*w.Rdt.Cache.Max != *w.Rdt.Cache.Min && mbaValue != mbaMaxValue) ||
+					(*w.Rdt.Cache.Min == 0 && *w.Rdt.Cache.Max == 0 && mbaValue != mbaMaxValue)) {
 				return fmt.Errorf("MBA only supported for Guaranteed Request and not for BestEffort and Shared")
 			}
-			if *w.Rdt.Mba.Percentage > 100 || *w.Rdt.Mba.Percentage <= 0 {
-				return fmt.Errorf("MBA values in percentage range from 1 to 100")
+			if mbaValue > mbaMaxValue || mbaValue <= 0 {
+				return fmt.Errorf("MBA values in should range from 1 to %d", mbaMaxValue)
 			}
 		}
 
 		if isL3CATSupported && isMbaSupported {
-			if w.Rdt.Cache.Max == nil && w.Rdt.Cache.Min == nil && w.Rdt.Mba.Percentage != nil {
+			if w.Rdt.Cache.Max == nil && w.Rdt.Cache.Min == nil && (w.Rdt.Mba.Percentage != nil || w.Rdt.Mba.Mbps != nil) {
 				return fmt.Errorf("Need to provide both cache and mba for better performance")
 			}
 		} else {
 			if isL3CATSupported {
-				if w.Rdt.Mba.Percentage != nil {
+				if w.Rdt.Mba.Percentage != nil || w.Rdt.Mba.Mbps != nil {
 					return fmt.Errorf("This machine supports only cache and not MBA")
 				}
 			} else {
@@ -348,7 +364,7 @@ func enforceMba(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 	}
 	rdtenforce.CandidateMba = make(map[string]*uint32, len(availableSchemata))
 	rdtenforce.TargetMba = "MB"
-	defaultMBAValue := defaultMBAPercentage
+	defaultMBAValue := mbaMaxValue
 	for k := range availableSchemata {
 		socketID, ok := strconv.Atoi(k)
 		if ok != nil {
@@ -356,7 +372,7 @@ func enforceMba(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 		}
 		// Check the socket to which the MBA params need to be modified
 		if inCacheList(uint32(socketID), er.SocketIDs) {
-			rdtenforce.CandidateMba[k] = w.Rdt.Mba.Percentage
+			rdtenforce.CandidateMba[k] = &mbaValue
 		} else {
 			rdtenforce.CandidateMba[k] = &defaultMBAValue
 		}
@@ -645,19 +661,51 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 			}
 		}
 
+		if isMbaSupported {
+			if isMbaMbpsAvailable {
+				if patched.Rdt.Mba.Percentage != nil {
+					return rmderror.NewAppError(http.StatusBadRequest, "Please provide MBA in Mbps")
+				}
+			} else {
+				if patched.Rdt.Mba.Mbps != nil {
+					return rmderror.NewAppError(http.StatusBadRequest, "Please provide MBA in Percentage")
+				}
+			}
+		}
+
 		if patched.Rdt.Mba.Percentage != nil {
-			if *patched.Rdt.Mba.Percentage > 0 && *patched.Rdt.Mba.Percentage <= 100 {
+			if *patched.Rdt.Mba.Percentage > 0 && *patched.Rdt.Mba.Percentage <= cache.MaxMBAPercentage {
 				w.Policy = ""
 				if w.Rdt.Mba.Percentage == nil {
 					w.Rdt.Mba.Percentage = patched.Rdt.Mba.Percentage
+					mbaValue = *patched.Rdt.Mba.Percentage
 					reEnforce = true
 				}
 				if w.Rdt.Mba.Percentage != nil && *w.Rdt.Mba.Percentage != *patched.Rdt.Mba.Percentage {
 					*w.Rdt.Mba.Percentage = *patched.Rdt.Mba.Percentage
+					mbaValue = *patched.Rdt.Mba.Percentage
 					reEnforce = true
 				}
 			} else {
 				return rmderror.NewAppError(http.StatusBadRequest, "MBA values range only from 1 to 100")
+			}
+		}
+
+		if patched.Rdt.Mba.Mbps != nil {
+			if *patched.Rdt.Mba.Mbps > 0 && *patched.Rdt.Mba.Mbps <= cache.MaxMBAMbps {
+				w.Policy = ""
+				if w.Rdt.Mba.Mbps == nil {
+					w.Rdt.Mba.Mbps = patched.Rdt.Mba.Mbps
+					mbaValue = *patched.Rdt.Mba.Mbps
+					reEnforce = true
+				}
+				if w.Rdt.Mba.Mbps != nil && *w.Rdt.Mba.Mbps != *patched.Rdt.Mba.Mbps {
+					*w.Rdt.Mba.Mbps = *patched.Rdt.Mba.Mbps
+					mbaValue = *patched.Rdt.Mba.Mbps
+					reEnforce = true
+				}
+			} else {
+				return rmderror.NewAppError(http.StatusBadRequest, "MBA values range only from 1 to 4294967290")
 			}
 		}
 
@@ -862,7 +910,7 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 		}
 		// Check if MBA is available and enabled in the host
 		// MBA to be used only for Guaranteed Cache Request
-		if w.Rdt.Mba.Percentage != nil {
+		if w.Rdt.Mba.Percentage != nil || w.Rdt.Mba.Mbps != nil {
 			if !isMbaSupported {
 				req.UseMba = false
 				log.Error("Mba is not supported in this machine")
@@ -877,8 +925,8 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 			}
 			if (w.Rdt.Cache.Min == nil && w.Rdt.Cache.Max == nil) ||
 				(req.UseCache && (*w.Rdt.Cache.Max == *w.Rdt.Cache.Min && *w.Rdt.Cache.Max > 0 ||
-					*w.Rdt.Cache.Max != *w.Rdt.Cache.Min && *w.Rdt.Mba.Percentage == 100 ||
-					*w.Rdt.Cache.Max == 0 && *w.Rdt.Cache.Min == 0 && *w.Rdt.Mba.Percentage == 100)) {
+					*w.Rdt.Cache.Max != *w.Rdt.Cache.Min && mbaValue == mbaMaxValue ||
+					*w.Rdt.Cache.Max == 0 && *w.Rdt.Cache.Min == 0 && mbaValue == mbaMaxValue)) {
 				req.UseMba = true
 			} else {
 				req.UseMba = false
@@ -1161,6 +1209,16 @@ func Init() error {
 		return err
 	}
 	pqos.StartCLOSPool()
+
+	if isMbaSupported {
+		isMbaMbpsAvailable = proc.GetMbaMbpsMode()
+		if isMbaMbpsAvailable {
+			mbaMaxValue = cache.MaxMBAMbps
+		} else {
+			mbaMaxValue = cache.MaxMBAPercentage
+		}
+	}
+
 	return err
 }
 

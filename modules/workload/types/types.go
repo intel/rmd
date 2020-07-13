@@ -42,7 +42,10 @@ type UserRDTWorkLoad struct {
 		} `json:"cache,omitempty"`
 		// MBA settings
 		Mba struct {
+			// MBA values to be specified in Percentage
 			Percentage *uint32 `json:"percentage,omitempty"`
+			// MBA values to be specified in MB per sec
+			Mbps *uint32 `json:"mbps,omitempty"`
 		} `json:"mba,omitempty"`
 	} `json:"rdt,omitempty"`
 	// Plugins contains information about RMD plugins and theirs settings
@@ -80,6 +83,7 @@ type RDTWorkLoad struct {
 		// MBA settings
 		Mba struct {
 			Percentage *uint32 `json:"percentage,omitempty"`
+			Mbps       *uint32 `json:"mbps,omitempty"`
 		} `json:"mba,omitempty"`
 	} `json:"rdt,omitempty"`
 	// Plugins contains information about RMD plugins and theirs settings
