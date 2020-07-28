@@ -20,9 +20,6 @@
 /**
  * Defines
  */
-/**
- * Defines
- */
 #define PQOS_MAX_CORES (1024)
 #define PQOS_MAX_PID (128)
 /*We need 4 main parameters for CAT & MBA. 
@@ -39,10 +36,11 @@ int pqos_wrapper_alloc_release(const unsigned *core_array, unsigned int core_amo
 int pqos_wrapper_alloc_assign(const unsigned *core_array, unsigned int core_amount_in_array, unsigned *class_id);
 int pqos_wrapper_set_mba_for_common_cos(unsigned classID, int mbaMode, const unsigned *mbaMax, const unsigned *socketsToSetArray, int numOfSockets);
 int pqos_wrapper_alloc_l3cache(unsigned classID, const unsigned *waysMask, const unsigned *socketsToSet, int numOfSockets);
-int pqos_wrapper_assoc_core(const unsigned *classIDs, const unsigned *cores, int numOfCores);
-int pqos_wrapper_assoc_pid(const unsigned *classIDs, const unsigned *tasks, int numOfTasks);
+int pqos_wrapper_assoc_core(unsigned classID, const unsigned *cores, int numOfCores);
+int pqos_wrapper_assoc_pid(unsigned classID, const unsigned *tasks, int numOfTasks);
 int pqos_wrapper_get_clos_num(int *l3ca_clos_num, int *mba_clos_num);
-
+int pqos_wrapper_get_num_of_sockets(int *numOfSockets);
+int pqos_wrapper_get_num_of_cacheways(int *numOfCacheways);
 // MBA struct type needed to set MBA correctly
 // => REQUESTED - defines what mba value should be applied
 // => ACTUAL - will be set by the PQoS library
@@ -77,14 +75,13 @@ int pqos_wrapper_init(void)
     return PQOS_RETVAL_OK;
 }
 
-/* Associate core*/
-// Example: params ({1,2,2}, {5,6,7}, 3) will be interpreted as following 3 pairs of (classid,coreid): (1,5),(2,6),(2,7)
-int pqos_wrapper_assoc_core(const unsigned *classIDs, const unsigned *cores, int numOfCores)
+/* Associate cores for common ClassID (clos)*/
+int pqos_wrapper_assoc_core(unsigned classID, const unsigned *cores, int numOfCores)
 {
     for (int i = 0; i < numOfCores; i++)
     {
         int ret;
-        ret = pqos_alloc_assoc_set(cores[i], classIDs[i]);
+        ret = pqos_alloc_assoc_set(cores[i], classID);
         if (ret != PQOS_RETVAL_OK)
         {
             debug_print("assoc_core failed!\n");
@@ -95,11 +92,11 @@ int pqos_wrapper_assoc_core(const unsigned *classIDs, const unsigned *cores, int
 }
 
 /*Asscoiate pid or task*/
-int pqos_wrapper_assoc_pid(const unsigned *classIDs, const unsigned *tasks, int numOfTasks)
+int pqos_wrapper_assoc_pid(unsigned classID, const unsigned *tasks, int numOfTasks)
 {
     for (int i = 0; i < numOfTasks; i++)
     {
-        int ret = pqos_alloc_assoc_set_pid(tasks[i], classIDs[i]);
+        int ret = pqos_alloc_assoc_set_pid(tasks[i], classID);
 
         if (ret != PQOS_RETVAL_OK)
         {
@@ -136,10 +133,12 @@ int pqos_wrapper_alloc_l3cache(unsigned classID, const unsigned *waysMask, const
     struct pqos_l3ca l3ca;
     for (int i = 0; i < numOfSockets; i++)
     {
+        memset(&l3ca, 0x0, sizeof(struct pqos_l3ca));
         l3ca.class_id = classID;
         l3ca.u.ways_mask = (uint64_t)waysMask[i];
 
         int socket = socketsToSet[i];
+        debug_print("Setting L3 cache value: %x on socket: %d for clos: %d\n", (int)waysMask[i], socket, (int)classID);
 
         ret = pqos_l3ca_set(p_l3cat_ids[socket], 1, &l3ca);
         if (ret != PQOS_RETVAL_OK)
@@ -379,5 +378,68 @@ int pqos_wrapper_get_clos_num(int *l3ca_clos_num, int *mba_clos_num)
         }
     }
 
+    return PQOS_RETVAL_OK;
+}
+
+/**
+ * Function returns number of sockets supported by platform
+ *
+ * @param[out] *numOfSockets  number of sockets
+ *
+ * @return PQOS_RETVAL_OK on success,  PQOS_RETVAL_PARAM on NULL pointer
+ *         or PQOS_RETVAL_ERROR on other error
+ */
+int pqos_wrapper_get_num_of_sockets(int *numOfSockets)
+{
+    const struct pqos_cpuinfo *p_cpu = NULL;
+    const struct pqos_cap *p_cap = NULL;
+    unsigned l3cat_id_count = 0;
+    unsigned *p_l3cat_ids = NULL;
+    /* Get CMT capability and CPU info pointer */
+    int ret = pqos_cap_get(&p_cap, &p_cpu);
+    if (ret != PQOS_RETVAL_OK)
+    {
+        debug_print("Error retrieving PQoS capabilities!\n");
+        return PQOS_RETVAL_ERROR;
+    }
+
+    /* Get CPU l3cat id information to set COS */
+    p_l3cat_ids = pqos_cpu_get_l3cat_ids(p_cpu, &l3cat_id_count);
+    if (p_l3cat_ids == NULL)
+    {
+        printf("Error retrieving CPU socket information!\n");
+        return PQOS_RETVAL_ERROR;
+    }
+
+    debug_print("Sockets amount on machine: %d\n", l3cat_id_count);
+    *numOfSockets = l3cat_id_count;
+    return PQOS_RETVAL_OK;
+}
+
+/**
+ * Function returns amount of cache_ways supported by platform
+ *
+ * @param[out] *numOfCacheways  number of cache ways
+ *
+ * @return PQOS_RETVAL_OK on success,  PQOS_RETVAL_PARAM on NULL pointer
+ *         or PQOS_RETVAL_ERROR on other error
+ */
+int pqos_wrapper_get_num_of_cacheways(int *numOfCacheways)
+{
+    const struct pqos_cpuinfo *p_cpu = NULL;
+    const struct pqos_cap *p_cap = NULL;
+    unsigned l3cat_id_count = 0;
+    unsigned *p_l3cat_ids = NULL;
+    /* Get CMT capability and CPU info pointer */
+    int ret = pqos_cap_get(&p_cap, &p_cpu);
+    if (ret != PQOS_RETVAL_OK)
+    {
+        debug_print("Error retrieving PQoS capabilities!\n");
+        return PQOS_RETVAL_ERROR;
+    }
+
+    debug_print("Cache ways amount on machine: %d", (int)p_cpu->l3.num_ways);
+
+    *numOfCacheways = (int)p_cpu->l3.num_ways;
     return PQOS_RETVAL_OK;
 }

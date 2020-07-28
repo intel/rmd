@@ -66,27 +66,39 @@ func TestGetNumberOfFreeCLOSes(t *testing.T) {
 
 func TestReturnClos(t *testing.T) {
 
-	usedCLOSes = []string{"COS5", "COS6"}
+	usedCLOSes = []string{"COS5", "COS6", "COS7", "COS8"}
 	availableCLOSes = []string{"COS2", "COS3", "COS4"}
 
 	tests := []struct {
-		name    string
-		cosname string
-		wantErr bool
+		name            string
+		cosname         string
+		expectUsed      []string
+		expectAvailable []string
+		wantErr         bool
 	}{
-		{"Positive 1 (return COS5)", "COS5", false},
-		{"Negative 1 (return COS123)", "COS123", true},
-		{"Positive 2 (return COS6)", "COS6", false},
-		{"Negative 2 (return COS5 again)", "COS5", true},
+		{"Positive 1 (return COS7)", "COS7", []string{"COS5", "COS6", "COS8"},
+			[]string{"COS2", "COS3", "COS4", "COS7"}, false},
+		{"Negative 1 (return COS123)", "COS123", []string{"COS5", "COS6", "COS8"},
+			[]string{"COS2", "COS3", "COS4", "COS7"}, true},
+		{"Positive 2 (return COS5)", "COS5", []string{"COS6", "COS8"},
+			[]string{"COS2", "COS3", "COS4", "COS7", "COS5"}, false},
+		{"Negative 2 (return COS5 again)", "COS5", []string{"COS6", "COS8"},
+			[]string{"COS2", "COS3", "COS4", "COS7", "COS5"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := ReturnClos(tt.cosname); (err != nil) != tt.wantErr {
 				t.Errorf("ReturnClos() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			if !reflect.DeepEqual(tt.expectUsed, usedCLOSes) {
+				t.Errorf("ReturnClos() error: expected used list %v found %v", tt.expectUsed, usedCLOSes)
+			}
+			if !reflect.DeepEqual(tt.expectAvailable, availableCLOSes) {
+				t.Errorf("ReturnClos() error: expected available list %v found %v", tt.expectAvailable, availableCLOSes)
+			}
 		})
 	}
-	if len(usedCLOSes) != 0 || len(availableCLOSes) != 5 {
+	if len(usedCLOSes) != 2 || len(availableCLOSes) != 5 {
 		t.Errorf("Invalid length of internal slices: used %v / available %v", len(usedCLOSes), len(availableCLOSes))
 	}
 }
@@ -153,6 +165,43 @@ func TestGetUsedCLOSes(t *testing.T) {
 			usedCLOSes = tt.input
 			if got := GetUsedCLOSes(); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetUsedCLOSes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMarkCLOSasUsed(t *testing.T) {
+
+	usedCLOSes = []string{}
+	tests := []struct {
+		name            string
+		param           string
+		available       []string
+		expectAvailable []string
+		expectUsed      []string
+		wantErr         bool
+	}{
+		{"Positive (1 COS available)", "COS3", []string{"COS3"},
+			[]string{}, []string{"COS3"}, false},
+		{"Positive (3 COSes available)", "COS5", []string{"COS4", "COS5", "COS6"},
+			[]string{"COS4", "COS6"}, []string{"COS3", "COS5"}, false},
+		{"Negative (no COS available)", "COS2", []string{}, []string{}, []string{"COS3", "COS5"}, true},
+		{"Negative (invalid COS name)", "CCOOSS4", []string{"COS2", "COS3", "COS4", "COS5"},
+			[]string{"COS2", "COS3", "COS4", "COS5"}, []string{"COS3", "COS5"}, true},
+		{"Negative (COS already used)", "COS6", []string{"COS2", "COS3", "COS4", "COS5"},
+			[]string{"COS2", "COS3", "COS4", "COS5"}, []string{"COS3", "COS5"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			availableCLOSes = tt.available
+			if err := MarkCLOSasUsed(tt.param); (err != nil) != tt.wantErr {
+				t.Errorf("MarkCLOSasUsed() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(tt.expectAvailable, availableCLOSes) {
+				t.Errorf("MarkCLOSasUsed() error: expected available list %v found %v", tt.expectAvailable, availableCLOSes)
+			}
+			if !reflect.DeepEqual(tt.expectUsed, usedCLOSes) {
+				t.Errorf("MarkCLOSasUsed() error: expected available list %v found %v", tt.expectUsed, usedCLOSes)
 			}
 		})
 	}

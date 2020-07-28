@@ -8,7 +8,7 @@ require (
 	github.com/emicklei/go-restful v2.4.0+incompatible
 	github.com/etcd-io/bbolt v1.3.3
 	github.com/fatih/structs v1.1.0 // indirect
-	github.com/fsnotify/fsnotify v1.4.7
+	github.com/fsnotify/fsnotify v1.4.9
 	github.com/gavv/monotime v0.0.0-20161010190848-47d58efa6955 // indirect
 	github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
 	github.com/gobwas/glob v0.2.3
@@ -20,6 +20,8 @@ require (
 	github.com/klauspost/compress v1.10.6 // indirect
 	github.com/mattn/go-colorable v0.0.10-0.20170816031813-ad5389df28cd // indirect
 	github.com/moul/http2curl v0.0.0-20161031194548-4e24498b31db // indirect
+	github.com/onsi/ginkgo v1.14.0
+	github.com/onsi/gomega v1.10.1
 	github.com/pelletier/go-buffruneio v0.2.0 // indirect
 	github.com/prashantv/gostub v0.0.0-20170112001514-5c68b99bb088
 	github.com/sergi/go-diff v0.0.0-20170409071739-feef008d51ad // indirect
@@ -35,7 +37,7 @@ require (
 	github.com/yudai/gojsondiff v1.0.0 // indirect
 	github.com/yudai/golcs v0.0.0-20170316035057-ecda9a501e82 // indirect
 	github.com/yudai/pp v2.0.1+incompatible // indirect
-	golang.org/x/sys v0.0.0-20200515095857-1151b9dac4a9
+	golang.org/x/sys v0.0.0-20200519105757-fe76b779f299
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/gavv/httpexpect.v1 v1.0.0-20170328075429-d852bb8255b6
 )

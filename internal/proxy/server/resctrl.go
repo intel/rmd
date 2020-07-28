@@ -21,14 +21,24 @@ func (*Proxy) DestroyResAssociation(grpName string, dummy *int) error {
 
 // RemoveTasks move tasks to default group
 func (*Proxy) RemoveTasks(tasks []string, dummy *int) error {
-	// return resctrl.RemoveTasks(tasks)
 	// Call PQOS Wrapper
-	pqos.DeallocateCLOS(tasks)
-	return nil
+	return pqos.DeallocateTasks(tasks)
+}
+
+// RemoveCores move tasks to default group
+func (*Proxy) RemoveCores(cores []string, dummy *int) error {
+	// Call PQOS Wrapper
+	return pqos.DeallocateCores(cores)
 }
 
 // EnableCat mounts resctrl
 func (*Proxy) EnableCat(dummy *int, result *bool) error {
 	*result = resctrl.EnableCat()
 	return nil
+}
+
+// ResetCOSParamsToDefaults resets L3 cache and MBA to default values for common COS#
+func (*Proxy) ResetCOSParamsToDefaults(cosName string, dummy *int) error {
+	// Call PQOS Wrapper
+	return pqos.ResetCOSParamsToDefaults(cosName)
 }

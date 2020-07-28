@@ -10,13 +10,16 @@ package pqos
 //int pqos_wrapper_alloc_assign(const unsigned *core_array, unsigned int core_amount_in_array, unsigned *class_id);
 //int pqos_wrapper_set_mba_for_common_cos(unsigned classID, int mbaMode, const unsigned *mbaMax, const unsigned *socketsToSetArray, int numOfSockets);
 //int pqos_wrapper_alloc_l3cache(unsigned classID, const unsigned *waysMask, const unsigned *socketsToSet, int numOfSockets);
-//int pqos_wrapper_assoc_core(const unsigned *classIDs, const unsigned *cores, int numOfCores);
-//int pqos_wrapper_assoc_pid(const unsigned *classIDs, const unsigned *tasks, int numOfTasks);
+//int pqos_wrapper_assoc_core(unsigned classID, const unsigned *cores, int numOfCores);
+//int pqos_wrapper_assoc_pid(unsigned classID, const unsigned *tasks, int numOfTasks);
 //int pqos_wrapper_get_clos_num(int *l3ca_clos_num, int *mba_clos_num);
+//int pqos_wrapper_get_num_of_sockets(int *numOfSockets);
+//int pqos_wrapper_get_num_of_cacheways(int *numOfCacheways);
 import "C"
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -25,11 +28,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+//constants for setting MBA to default values
+const (
+	// from documentation math.MaxUint32 BUT there is rounding bug in PQoS
+	// so we must subtract 10 (default step for MBA) to avoid overflow
+	defaultMBpsMBAValue       = math.MaxUint32 - 10
+	defaultPercentageMBAValue = 100
+)
+
 var (
 	availableCLOSes []string
 	usedCLOSes      []string
 	reservedCLOSes  []string
 	sharedCLOS      string
+	numOfSockets    int // amount of current machine's sockets
+	numOfCacheways  int // amount of current machine's cache ways
 )
 
 // MBAMode describes selected MBA (Memory Bandwidth Allocation) mode
@@ -61,18 +74,16 @@ type L3CacheStruct struct {
 	SocketsToSet []int    // sockets to set
 }
 
-// AssocCoresStruct contains values needed to assoc cores
-// amount of elements in Cores must be equal elements amount in ClassIDs
+// AssocCoresStruct contains values needed to assoc cores for common ClassID
 type AssocCoresStruct struct {
-	ClassIDs []int // classes of service (COS#)
-	Cores    []int // cores to associate
+	ClassID int   // common class of service (COS#)
+	Cores   []int // cores to associate
 }
 
-// AssocTasksStruct contains values needed to assoc pid/task
-// amount of elements in Tasks must be equal elements amount in ClassIDs
+// AssocTasksStruct contains values needed to assoc pid/task for common ClassID
 type AssocTasksStruct struct {
-	ClassIDs []int // classes of service (COS#)
-	Tasks    []int // tasks to associate
+	ClassID int   // common class of service (COS#)
+	Tasks   []int // tasks to associate
 }
 
 // names of COSes reserved for special purposes
@@ -138,19 +149,80 @@ func AllocateCLOS(res *resctrl.ResAssociation, name string) {
 		}
 	}
 
-	var pid, numPid int
-	numPid = 0
-	if len(res.Tasks) > 0 {
-		pid, _ = strconv.Atoi(res.Tasks[0])
-		numPid = 1
-	}
-
-	core, _ := strconv.ParseUint(strings.Split(res.CPUs, ",")[1], 16, 64)
-
 	var s = []uint64{0, 0}
 	s[res.CacheSchemata["L3"][0].ID], _ = strconv.ParseUint(res.CacheSchemata["L3"][0].Mask, 16, 64)
 	s[res.CacheSchemata["L3"][1].ID], _ = strconv.ParseUint(res.CacheSchemata["L3"][1].Mask, 16, 64)
-	log.Debugf("AllocateCLOS: %x %x    pid: %v  numPid: %v  core: %v", s[0], s[1], pid, numPid, core)
+	log.Debugf("AllocateCLOS: %x %x   clos: %v", s[0], s[1], clos)
+
+	var cacheToSet L3CacheStruct
+	cacheToSet.ClassID = clos
+	cacheToSet.WaysMask = s
+
+	socketsToSet := []int{}
+	for i := 0; i < GetNumOfSockets(); i++ {
+		// TODO PQOS Add here handling for WaysMask
+		socketsToSet = append(socketsToSet, i)
+	}
+	cacheToSet.SocketsToSet = socketsToSet
+
+	err := AllocL3Cache(cacheToSet)
+	if err != nil {
+		log.Errorf("Failed to allocate L3 cache. Reason: %v", err)
+		return
+	}
+
+	// don't need to invoke AssocTask/AssocCore code for COS#0
+	if clos == 0 {
+		return
+	}
+
+	tasksAmount := len(res.Tasks)
+
+	if tasksAmount > 0 {
+		log.Debugf("Tasks association will be performed")
+
+		tasksAsInts := make([]int, 0, tasksAmount)
+		for _, singlePidAsString := range res.Tasks {
+
+			pidAsInt, err := strconv.Atoi(singlePidAsString)
+			if err != nil {
+				log.Errorf("Failed convert pid string format into integer. Reason: %v", err)
+				return
+			}
+			tasksAsInts = append(tasksAsInts, pidAsInt)
+		}
+
+		log.Debugf("Tasks as integers: %v", tasksAsInts)
+
+		var tasksToAssoc AssocTasksStruct
+		tasksToAssoc.ClassID = clos
+		tasksToAssoc.Tasks = tasksAsInts
+		err = AssocTask(tasksToAssoc)
+		if err != nil {
+			log.Errorf("Failed to associate tasks. Reason: %v", err)
+			return
+		}
+	} else {
+		log.Debugf("Cores association will be performed")
+
+		// need to convert core bitmask into core integer array
+		cores, err := CoreMaskToSlice(res.CPUs)
+		if err != nil {
+			log.Errorf("Failed to parse core bitmask string into core integer array.Reason: %v", err)
+			return
+		}
+
+		log.Debugf("Cores in array form: %v", cores)
+
+		var coresToAssoc AssocCoresStruct
+		coresToAssoc.ClassID = clos
+		coresToAssoc.Cores = cores
+		err = AssocCore(coresToAssoc)
+		if err != nil {
+			log.Errorf("Failed to associate cores. Reason: %v", err)
+			return
+		}
+	}
 
 	// set MBA if specified in res
 	if len(res.MbaSchemata["MB"]) > 0 {
@@ -158,7 +230,7 @@ func AllocateCLOS(res *resctrl.ResAssociation, name string) {
 
 		mbaMode, err := CheckMBA()
 		if err != nil {
-			log.Debugf("Failed to check MBA mode")
+			log.Errorf("Failed to check MBA mode")
 			return
 		}
 
@@ -179,13 +251,67 @@ func AllocateCLOS(res *resctrl.ResAssociation, name string) {
 		if err != nil {
 			log.Errorf("Failed to set MBA for cos%v. Reason: %v", clos, err)
 		}
-
 	}
 }
 
-// DeallocateCLOS ...
-func DeallocateCLOS(Tasks []string) {
+// DeallocateTasks ...
+func DeallocateTasks(tasks []string) error {
+	if len(tasks) == 0 {
+		return errors.New("Empty task list given to DeallocateTasks")
+	}
+	// avoid printing too much
+	if len(tasks) > 20 {
+		log.Debugf("DeallocateTasks called for: %v (... and more)", tasks[:20])
+	} else {
+		log.Debugf("DeallocateTasks called for: %v", tasks)
+	}
 
+	taskCount := len(tasks)
+
+	cTasks := make([]C.uint, 0, taskCount)
+	for _, tidStr := range tasks {
+		// assuming that task id strings have already been validated (not validating again)
+		tidNum, _ := strconv.Atoi(tidStr)
+		cTasks = append(cTasks, C.uint(tidNum))
+	}
+
+	result := C.pqos_wrapper_assoc_pid(C.uint(0), &(cTasks[0]), C.int(taskCount))
+
+	if result != 0 {
+		return errors.New("Failed to re-associate given tasks to CLOS 0")
+	}
+
+	return nil
+}
+
+// DeallocateCores ...
+func DeallocateCores(cores []string) error {
+	if len(cores) == 0 {
+		return errors.New("Empty task list given to DeallocateCores")
+	}
+	// avoid printing too much
+	if len(cores) > 20 {
+		log.Debugf("DeallocateCores called for: %v (... and more)", cores[:20])
+	} else {
+		log.Debugf("DeallocateCores called for: %v", cores)
+	}
+
+	coreCount := len(cores)
+
+	cCores := make([]C.uint, 0, coreCount)
+	for _, tidStr := range cores {
+		// assuming that task id strings have already been validated (not validating again)
+		tidNum, _ := strconv.Atoi(tidStr)
+		cCores = append(cCores, C.uint(tidNum))
+	}
+
+	result := C.pqos_wrapper_assoc_core(C.uint(0), &(cCores[0]), C.int(coreCount))
+
+	if result != 0 {
+		return errors.New("Failed to re-associate given cores to CLOS 0")
+	}
+
+	return nil
 }
 
 // Init ...
@@ -195,6 +321,23 @@ func Init() error {
 		// pqos_wrapper_init() returns non-zero value in case of initialization failure
 		return errors.New("Failed to initialize PQOS driver")
 	}
+
+	// get number of sockets and save as global variable
+	var currentNumOfSockets C.int
+	result = C.pqos_wrapper_get_num_of_sockets(&currentNumOfSockets)
+	if result != 0 {
+		return errors.New("Failed to get sockets amount for current machine")
+	}
+	numOfSockets = int(currentNumOfSockets)
+
+	// get number of cache ways and save as global variable
+	var currentNumOfCacheways C.int
+	result = C.pqos_wrapper_get_num_of_cacheways(&currentNumOfCacheways)
+	if result != 0 {
+		return errors.New("Failed to get cache ways amount for current machine")
+	}
+	numOfCacheways = int(currentNumOfCacheways)
+
 	return nil
 }
 
@@ -327,7 +470,6 @@ func AllocL3Cache(l3ValuesToSet L3CacheStruct) error {
 		return errors.New("Amount of elements in WaysMask must be equal amount of sockets")
 	}
 	numOfElements := len(l3ValuesToSet.SocketsToSet)
-
 	waysMaskAsUInts := make([]C.uint, 0, numOfElements)
 	for _, s := range l3ValuesToSet.WaysMask {
 		waysMaskAsUInts = append(waysMaskAsUInts, C.uint(s))
@@ -337,7 +479,7 @@ func AllocL3Cache(l3ValuesToSet L3CacheStruct) error {
 	for _, s := range l3ValuesToSet.SocketsToSet {
 		socketsToSetAsUInts = append(socketsToSetAsUInts, C.uint(s))
 	}
-
+	log.Debugf("Want to set wayMask: %x on sockets: %v", waysMaskAsUInts, socketsToSetAsUInts)
 	result := C.pqos_wrapper_alloc_l3cache(C.uint(l3ValuesToSet.ClassID), &(waysMaskAsUInts[0]), &(socketsToSetAsUInts[0]), C.int(numOfElements))
 
 	if result != 0 {
@@ -351,22 +493,14 @@ func AllocL3Cache(l3ValuesToSet L3CacheStruct) error {
 // Function returns operation status (nil or error)
 func AssocCore(coresStruct AssocCoresStruct) error {
 
-	if len(coresStruct.ClassIDs) != len(coresStruct.Cores) {
-		return errors.New("Amount of elements in Cores must be equal amount of ClassIDs")
-	}
 	numOfElements := len(coresStruct.Cores)
-
-	classIDsAsUInts := make([]C.uint, 0, numOfElements)
-	for _, s := range coresStruct.ClassIDs {
-		classIDsAsUInts = append(classIDsAsUInts, C.uint(s))
-	}
 
 	coresAsUInts := make([]C.uint, 0, numOfElements)
 	for _, s := range coresStruct.Cores {
 		coresAsUInts = append(coresAsUInts, C.uint(s))
 	}
 
-	result := C.pqos_wrapper_assoc_core(&(classIDsAsUInts[0]), &(coresAsUInts[0]), C.int(numOfElements))
+	result := C.pqos_wrapper_assoc_core(C.uint(coresStruct.ClassID), &(coresAsUInts[0]), C.int(numOfElements))
 
 	if result != 0 {
 		return errors.New("Failed to associate specified cores with given class IDs")
@@ -379,22 +513,14 @@ func AssocCore(coresStruct AssocCoresStruct) error {
 // Function returns operation status (nil or error)
 func AssocTask(tasksStruct AssocTasksStruct) error {
 
-	if len(tasksStruct.ClassIDs) != len(tasksStruct.Tasks) {
-		return errors.New("Amount of elements in Tasks must be equal amount of ClassIDs")
-	}
 	numOfElements := len(tasksStruct.Tasks)
-
-	classIDsAsUInts := make([]C.uint, 0)
-	for _, s := range tasksStruct.ClassIDs {
-		classIDsAsUInts = append(classIDsAsUInts, C.uint(s))
-	}
 
 	tasksAsUInts := make([]C.uint, 0)
 	for _, s := range tasksStruct.Tasks {
 		tasksAsUInts = append(tasksAsUInts, C.uint(s))
 	}
 
-	result := C.pqos_wrapper_assoc_pid(&(classIDsAsUInts[0]), &(tasksAsUInts[0]), C.int(numOfElements))
+	result := C.pqos_wrapper_assoc_pid(C.uint(tasksStruct.ClassID), &(tasksAsUInts[0]), C.int(numOfElements))
 
 	if result != 0 {
 		return errors.New("Failed to associate specified cores with given class IDs")
@@ -477,11 +603,10 @@ func ReturnClos(name string) error {
 		usedCLOSes = usedCLOSes[1:]
 	case len(usedCLOSes) - 1:
 		// remove last item
-		usedCLOSes = usedCLOSes[:len(usedCLOSes)-2]
+		usedCLOSes = usedCLOSes[:len(usedCLOSes)-1]
 	default:
 		// remove some middle item
-		copy(usedCLOSes[index:], usedCLOSes[index+1:])
-		usedCLOSes = usedCLOSes[:len(usedCLOSes)-1]
+		usedCLOSes = append(usedCLOSes[:index], usedCLOSes[index+1:]...)
 	}
 	log.Debugf("CLOS '%v' removed from list of used CLOSes", name)
 	return nil
@@ -508,4 +633,180 @@ func GetSharedCLOS() (string, error) {
 		sharedCLOS = newShared
 	}
 	return sharedCLOS, nil
+}
+
+// MarkCLOSasUsed moves given CLOS name from available CLOSes to used CLOSes
+// Used if for some reason (ex. check workload initialization) specific CLOS
+// is in use but not fetched using pqos package API
+func MarkCLOSasUsed(name string) error {
+	if !strings.HasPrefix(name, "COS") {
+		return errors.New("Invalid CLOS name given ")
+	}
+
+	index := -1
+	for idx, val := range availableCLOSes {
+		if val == name {
+			index = idx
+			break
+		}
+	}
+
+	if index == -1 {
+		// CLOS not found
+		return fmt.Errorf("CLOS %v not found on available list", name)
+	}
+
+	// return CLOS name to available list ...
+	usedCLOSes = append(usedCLOSes, name)
+	// ... and remove it from used list
+	switch index {
+	case 0:
+		// remove first item
+		availableCLOSes = availableCLOSes[1:]
+	case len(availableCLOSes) - 1:
+		// remove last item
+		availableCLOSes = availableCLOSes[:len(availableCLOSes)-1]
+	default:
+		// remove some middle item
+		availableCLOSes = append(availableCLOSes[:index], availableCLOSes[index+1:]...)
+	}
+	log.Debugf("%v moved to used CLOSes", name)
+
+	return nil
+}
+
+// CoreMaskToSlice converts bitmasks into cores array
+func CoreMaskToSlice(mask string) ([]int, error) {
+	if len(mask) == 0 {
+		return []int{}, errors.New("Empty mask")
+	}
+	maskParts := strings.Split(mask, ",")
+
+	uintLen := 32
+	maskPartBase := 0
+	if len(maskParts[len(maskParts)-1]) > 8 {
+		uintLen = 64
+	}
+
+	coreList := make([]int, 0, 16) // for most cases there will be no more than 16 cores in workload
+	// process mask parts from last one so from lowest core numbers
+	for index := len(maskParts) - 1; index >= 0; index-- {
+		maskPartAsUint, err := strconv.ParseUint(maskParts[index], 16, uintLen)
+		if err != nil {
+			return []int{}, fmt.Errorf("String parsing error: %v", err.Error())
+		}
+		for shiftNum := 0; shiftNum < uintLen; shiftNum++ {
+			if (maskPartAsUint & 0x0001) == 1 {
+				coreList = append(coreList, shiftNum+maskPartBase)
+			}
+			maskPartAsUint >>= 1
+		}
+		maskPartBase += uintLen
+
+	}
+	return coreList, nil
+}
+
+// resetMBAToDefaults resets MBA to default values for specified COS#
+func resetMBAToDefaults(cos int) error {
+
+	log.Debugf("Setting MBA to default values for COS%v", cos)
+
+	mbaMode, err := CheckMBA()
+	if err != nil {
+		log.Error("Failed to check MBA mode.")
+		return err
+	}
+
+	var mbaToSet MbaStruct
+	mbaToSet.ClassID = cos
+	mbaToSet.MbaMode = mbaMode
+
+	valuesForMBA := []int{}
+	socketsForMBA := []int{}
+	defaultModeValueToSet := defaultPercentageMBAValue
+	if mbaMode != 0 {
+		defaultModeValueToSet = defaultMBpsMBAValue
+	}
+
+	for i := 0; i < GetNumOfSockets(); i++ {
+		valuesForMBA = append(valuesForMBA, defaultModeValueToSet)
+		socketsForMBA = append(socketsForMBA, i)
+	}
+
+	mbaToSet.MbaMaxes = valuesForMBA
+	mbaToSet.SocketsToSet = socketsForMBA
+
+	err = SetMbaForSingleCos(mbaToSet)
+	if err != nil {
+		log.Errorf("Failed to set reset MBA for cos%v. Reason: %v", cos, err)
+	}
+
+	return nil
+}
+
+// GetNumOfSockets returns amount of sockets for current machine
+// which is a global variable for PQoS package
+func GetNumOfSockets() int {
+	return numOfSockets
+}
+
+// GetNumOfCacheways returns amount of cacheways for current machine
+// which is a global variable for PQoS package
+func GetNumOfCacheways() int {
+	return numOfCacheways
+}
+
+// resetL3CacheToDefaults resets L3 cache to default values for specified COS#
+func resetL3CacheToDefaults(cos int) error {
+
+	log.Debugf("Setting L3 cache to default values for COS%d", cos)
+
+	var cacheToSet L3CacheStruct
+	cacheToSet.ClassID = cos
+
+	valuesForCache := []uint64{}
+	socketsForCache := []int{}
+	defaultCacheValue := uint64(1<<GetNumOfCacheways() - 1) //prepare default mask to set where -1 to avoid 00000001 when 0 provided
+
+	for i := 0; i < GetNumOfSockets(); i++ {
+		valuesForCache = append(valuesForCache, defaultCacheValue)
+		socketsForCache = append(socketsForCache, i)
+	}
+	cacheToSet.WaysMask = valuesForCache
+	cacheToSet.SocketsToSet = socketsForCache
+
+	err := AllocL3Cache(cacheToSet)
+	if err != nil {
+		log.Errorf("Failed to reset L3 cache to defaults. Reason: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+// ResetCOSParamsToDefaults resets L3 cache and MBA to default values for specified COS#
+func ResetCOSParamsToDefaults(cosName string) error {
+	log.Debugf("Setting L3 cache to default values for %v", cosName)
+	//splits "COS#"" into "COS" and "#"
+	cosSlice := strings.SplitAfter(cosName, "COS")
+	cosAsInt, err := strconv.Atoi(cosSlice[1])
+	if err != nil {
+		log.Errorf("Failed to convert COS from string to int")
+		return err
+	}
+
+	err = resetL3CacheToDefaults(cosAsInt)
+	if err != nil {
+		log.Errorf("%v", err)
+		return err
+	}
+
+	err = resetMBAToDefaults(cosAsInt)
+	if err != nil {
+		log.Errorf("%v", err)
+		return err
+	}
+
+	return nil
 }

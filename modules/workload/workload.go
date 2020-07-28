@@ -555,23 +555,6 @@ func Release(w *wltypes.RDTWorkLoad) error {
 	l.Lock()
 	defer l.Unlock()
 
-	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
-
-	r, ok := resaall[w.CosName]
-
-	if !ok {
-		log.Warningf("Could not find COS %s.", w.CosName)
-		return nil
-	}
-
-	r.Tasks = util.SubtractStringSlice(r.Tasks, w.TaskIDs)
-	cpubm, _ := cache.BitmapsCPUWrapper(r.CPUs)
-
-	if len(w.CoreIDs) > 0 {
-		wcpubm, _ := cache.BitmapsCPUWrapper(w.CoreIDs)
-		cpubm = cpubm.Axor(wcpubm)
-	}
-
 	for module, params := range w.Plugins {
 		log.Debugf("Sending release request to %v module with %v params", module, params) // temporary log
 
@@ -602,16 +585,12 @@ func Release(w *wltypes.RDTWorkLoad) error {
 		}
 	}
 
-	// safely remove resource group if no tasks and cpu bit map is empty
-	if len(r.Tasks) < 1 && cpubm.IsEmpty() {
-		log.Printf("Remove resource group: %s", w.CosName)
-		if err := proxyclient.DestroyResAssociation(w.CosName); err != nil {
-			return err
-		}
-		pqos.ReturnClos(w.CosName)
-		return cache.SetOSGroup()
+	// CosName is used only for RDT based workloads so now check it en exit if not found
+	if w.CosName == "" {
+		return nil
 	}
-	// remove workload task ids from resource group
+
+	// remove workload tasks from resource group
 	if len(w.TaskIDs) > 0 {
 		if err := proxyclient.RemoveTasks(w.TaskIDs); err != nil {
 			log.Printf("Ignore Error while remove tasks %s", err)
@@ -619,11 +598,21 @@ func Release(w *wltypes.RDTWorkLoad) error {
 		}
 	}
 
-	pqos.ReturnClos(w.CosName)
+	// remove workload cores from resource group
 	if len(w.CoreIDs) > 0 {
-		r.CPUs = cpubm.ToString()
-		return proxyclient.Commit(r, w.CosName)
+		if err := proxyclient.RemoveCores(w.CoreIDs); err != nil {
+			log.Printf("Ignore Error while remove tasks %s", err)
+			return nil
+		}
 	}
+
+	// set CLOS cache/MBA to default values
+	if err := proxyclient.ResetCOSParamsToDefaults(w.CosName); err != nil {
+		log.Errorf("%v", err)
+		return nil
+	}
+
+	pqos.ReturnClos(w.CosName)
 	return nil
 }
 
@@ -1209,6 +1198,11 @@ func Init() error {
 		workloadDatabase = temp
 		go startDBContentValidation()
 	}
+	// CLOS pool has to be initialized before it can be used
+	if err := pqos.InitCLOSPool(); err != nil {
+		log.Errorf("Failed to initialize CLOS pool: %v", err.Error())
+		return errors.New("CLOS pool initialization failure")
+	}
 	isMbaSupported, err = proc.IsMbaAvailable()
 	if err != nil {
 		return err
@@ -1257,10 +1251,19 @@ func Init() error {
 				} else {
 					return fmt.Errorf("Workload in database contains MBA setting (percentage) not compatible with current configuration (%v)", rdtc.MBAMode)
 				}
+			} else {
+				// workload is valid so check it's cos_name and mark it as used
+				if len(wl.CosName) > 0 {
+					err := pqos.MarkCLOSasUsed(wl.CosName)
+					if err != nil {
+						return fmt.Errorf("Problem with CLOS of workload from database: %v", err.Error())
+					}
+				}
 			}
 		}
 	}
 
+	// PQOS TODO Code below proably will not be needed after porting to PQOS
 	if isMbaSupported {
 		isMbaMbpsAvailable = proc.GetMbaMbpsMode()
 		if isMbaMbpsAvailable {
