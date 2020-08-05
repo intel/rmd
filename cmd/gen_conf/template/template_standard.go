@@ -46,7 +46,7 @@ plugins = "{{.plugins}}" # comma separated list of enabled RMD plugins, for each
 dbValidatorInterval = {{.dbValidatorInterval}}
 
 [rdt]
-mbaMode = "{{mbaMode}}" # MBA mode of operation, possible options are: "none", "percentage" and "mbps"
+mbaMode = "{{.mbaMode}}" # MBA mode of operation, possible options are: "none", "percentage" and "mbps"
 
 [log]
 path = "{{.logfile}}"

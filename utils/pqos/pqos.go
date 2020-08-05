@@ -564,7 +564,7 @@ func GetNumOfCLOSes(cache, mba bool) (int, error) {
 // UseAvailableCLOS takes one CLOS name from list of available ones, moves it to used CLOSes and returns it's name
 // If no available CLOS found then empty name and non-nil error is returned
 func UseAvailableCLOS() (string, error) {
-	// PQOS TODO Add locks for thread safety
+	// TODO In future add locks for thread safety (in some rare situtations race condition can appear)
 	if len(availableCLOSes) < 1 {
 		return "", errors.New("No free CLOS available")
 	}
@@ -577,7 +577,7 @@ func UseAvailableCLOS() (string, error) {
 
 // ReturnClos moves CLOS with given name from used list into available list
 func ReturnClos(name string) error {
-	// PQOS TODO Add locks for thread safety
+	// TODO In future add locks for thread safety (in some rare situtations race condition can appear)
 	// perform some basic checks for easier debugging
 	if name == "" || !strings.HasPrefix(name, "COS") {
 		return fmt.Errorf("Invalid clos name given: '%v'", name)
@@ -623,7 +623,7 @@ func GetNumberOfFreeCLOSes() int {
 // GetSharedCLOS returns name assigned to shared workloads COS.
 // If shared COS have not been reserved yet function tries to reserve it
 func GetSharedCLOS() (string, error) {
-	// PQOS TODO Should implement thread-safe version
+	// TODO In future add locks for thread safety (in some rare situtations race condition can appear)
 	if sharedCLOS == "" {
 		// have to reserve new COS
 		newShared, err := UseAvailableCLOS()

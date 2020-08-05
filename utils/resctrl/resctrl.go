@@ -212,41 +212,6 @@ func GetResAssociation(availableCLOS []string) map[string]*ResAssociation {
 	return ress
 }
 
-// Commit resources in resctrl
-// FIXME Commit should be a transaction.
-// So we use taskFlow to guarantee the consistency.
-// Also we need a coarse granularity lock for IPC. We already has it.
-// Also we need a file lock for consistency among different processes. In plan.
-// After some test on taskFlow, we can remove these logic code and use taskFlow.
-// The taskFlow need a snapshot of all ResAssociation for the transaction.
-// It can be gotten by GetResAssociation.
-
-// func Commit(r *ResAssociation, group string) error {
-// 	if !IsIntelRdtMounted() {
-// 		return fmt.Errorf("Can't apply this association, for resctrl is not mounted")
-// 	}
-
-// 	return taskFlow(group, r, GetResAssociation())
-// }
-
-// CommitAll change all resource group
-// FIXME need to catch error
-
-// func CommitAll(mRes map[string]*ResAssociation) error {
-// 	ress := GetResAssociation()
-// 	for name, res := range mRes {
-// 		Commit(res, name)
-// 	}
-
-// 	// Golang does not support set difference
-// 	for name := range ress {
-// 		if _, ok := mRes[name]; !ok && name != "." {
-// 			DestroyResAssociation(name)
-// 		}
-// 	}
-// 	return nil
-// }
-
 // RdtCosInfo is from /sys/fs/resctrl/info
 type RdtCosInfo struct {
 	CbmMask    string

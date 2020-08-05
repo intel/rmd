@@ -428,8 +428,7 @@ int pqos_wrapper_get_num_of_cacheways(int *numOfCacheways)
 {
     const struct pqos_cpuinfo *p_cpu = NULL;
     const struct pqos_cap *p_cap = NULL;
-    unsigned l3cat_id_count = 0;
-    unsigned *p_l3cat_ids = NULL;
+
     /* Get CMT capability and CPU info pointer */
     int ret = pqos_cap_get(&p_cap, &p_cpu);
     if (ret != PQOS_RETVAL_OK)

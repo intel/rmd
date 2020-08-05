@@ -55,9 +55,9 @@ var _ = Describe("Workload", func() {
 				verifyWrokload(he, data, isMbaSupported)
 			})
 		})
-
+		// MBA not supported for shared group
 		Context("When request a new workload API with max_cache = min_cache and cpus", func() {
-			It("Should return 200", func() {
+			It("Should return 500", func() {
 
 				data := testhelpers.AssembleRequest(
 					[]*os.Process{}, []string{"4-5"}, 1, 1, defaultMbaValue, "")
@@ -72,12 +72,16 @@ var _ = Describe("Workload", func() {
 				verifyWrokload(he, data, isMbaSupported)
 			})
 		})
-
+		// MBA not supported for shared group at current version
+		// TODO PQOS: change this test when shared group will be supported
 		Context("When request a new workload API with max_cache = min_cache = 0 and cpus", func() {
-			It("Should return 200", func() {
+			It("Should return 500", func() {
 				data := testhelpers.AssembleRequest(
 					[]*os.Process{}, []string{"4-5"}, 0, 0, defaultMbaValue, "")
-				verifyWrokload(he, data, isMbaSupported)
+				he.POST("/").WithHeader("Content-Type", "application/json").
+					WithJSON(data).
+					Expect().
+					Status(http.StatusInternalServerError)
 			})
 		})
 
@@ -121,7 +125,7 @@ func verifyWrokload(he *httpexpect.Expect, data map[string]interface{}, isMbaSup
 
 	workloadId := repobj.Value("id").String().Raw()
 	cosName := repobj.Value("cos_name").String().Raw()
-	resall := resctrl.GetResAssociation()
+	resall := resctrl.GetResAssociation(nil)
 
 	fmt.Println("Resall : ", resall, resall[cosName])
 

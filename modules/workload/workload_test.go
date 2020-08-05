@@ -8,6 +8,7 @@ import (
 	"github.com/intel/rmd/modules/cache"
 	tw "github.com/intel/rmd/modules/workload/types"
 	"github.com/intel/rmd/utils/proc"
+	"github.com/intel/rmd/utils/resctrl"
 	. "github.com/prashantv/gostub"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/spf13/pflag"
@@ -22,6 +23,8 @@ func init() {
 	pflag.Int("debugport", 0, "Debug listen port")
 	pflag.String("conf-dir", "", "Directly of config file")
 	pflag.String("clientauth", "challenge", "The policy the server will follow for TLS Client Authentication")
+	pflag.String("sysresctrl", "/sys/fs/resctrl", "Path to resctrl")
+
 	// set database details
 	viper.Set("database.backend", "bolt")
 	viper.Set("database.dbname", "rmd")
@@ -66,7 +69,13 @@ func TestGetCacheIDs(t *testing.T) {
 
 func TestValidateWorkLoad(t *testing.T) {
 	//prepare DB for test
-	err := Init()
+
+	err := resctrl.Init() //to read "sysresctrl"
+	if err != nil {
+		t.Errorf("Failed to init resctrl - tests results can be corrupted\n")
+	}
+
+	err = Init()
 	if err != nil {
 		t.Errorf("Cannot create database - tests results can be corrupted\n")
 	}
@@ -154,6 +163,12 @@ func Test_prepareCoreIDs(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
+
+	err := resctrl.Init() //to read "sysresctrl"
+	if err != nil {
+		t.Errorf("Failed to init resctrl - tests results can be corrupted\n")
+	}
+
 	tests := []struct {
 		name    string
 		wantErr bool
@@ -251,6 +266,12 @@ func Test_inCacheList(t *testing.T) {
 }
 
 func TestGetByUUID(t *testing.T) {
+
+	err := resctrl.Init() //to read "sysresctrl"
+	if err != nil {
+		t.Errorf("Failed to init resctrl - tests results can be corrupted\n")
+	}
+
 	type args struct {
 		uuid string
 	}
@@ -331,6 +352,12 @@ func TestGetAll(t *testing.T) {
 }
 
 func TestGetWorkloadByID(t *testing.T) {
+
+	err := resctrl.Init() //to read "sysresctrl"
+	if err != nil {
+		t.Errorf("Failed to init resctrl - tests results can be corrupted\n")
+	}
+
 	type args struct {
 		id string
 	}
@@ -370,6 +397,11 @@ func TestGetWorkloadByID(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
+
+	err := resctrl.Init() //to read "sysresctrl"
+	if err != nil {
+		t.Errorf("Failed to init resctrl - tests results can be corrupted\n")
+	}
 
 	workloadID := "5632"
 	myWorkload := tw.RDTWorkLoad{ID: workloadID, Policy: "bronze"}
@@ -433,6 +465,11 @@ func TestCreate(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 
+	err := resctrl.Init() //to read "sysresctrl"
+	if err != nil {
+		t.Errorf("Failed to init resctrl - tests results can be corrupted\n")
+	}
+
 	myWorkload := tw.RDTWorkLoad{ID: "13141516"}
 	type args struct {
 		wl *tw.RDTWorkLoad
@@ -469,6 +506,11 @@ func TestDelete(t *testing.T) {
 
 func Test_validateInDB(t *testing.T) {
 
+	err := resctrl.Init() //to read "sysresctrl"
+	if err != nil {
+		t.Errorf("Failed to init resctrl - tests results can be corrupted\n")
+	}
+
 	myWorkload := tw.RDTWorkLoad{ID: "151515151515151"}
 	type args struct {
 		wl *tw.RDTWorkLoad
@@ -503,6 +545,12 @@ func Test_validateInDB(t *testing.T) {
 }
 
 func Test_updateInDB(t *testing.T) {
+
+	err := resctrl.Init() //to read "sysresctrl"
+	if err != nil {
+		t.Errorf("Failed to init resctrl - tests results can be corrupted\n")
+	}
+
 	myWorkload := tw.RDTWorkLoad{ID: "2626262626262626262"}
 	type args struct {
 		w *tw.RDTWorkLoad
@@ -646,6 +694,16 @@ func Test_validate(t *testing.T) {
 	// Check if MBA is supported in the host. Error check not required
 	isMbaSupported, _ = proc.IsMbaAvailable()
 
+	err := resctrl.Init() //to read "sysresctrl"
+	if err != nil {
+		t.Errorf("Failed to init resctrl - tests results can be corrupted\n")
+	}
+
+	err = Init()
+	if err != nil {
+		t.Errorf("Cannot create database - tests results can be corrupted\n")
+	}
+
 	w := tw.RDTWorkLoad{}
 	w.CoreIDs = []string{"3"}
 	w.Origin = "REST"
@@ -695,7 +753,7 @@ func Test_validate(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"Correct case no PState", args{w: &w}, !isMbaSupported},
+		{"Correct case", args{w: &w}, !isMbaSupported},
 		{"Incorrect Mba Value provided", args{w: &wWrongMbaValue}, true},
 		{"Lack of cache ID disabled", args{w: &wLackOfCacheID}, true},
 		{"Policy silver case", args{w: &wPolicyExists}, false},

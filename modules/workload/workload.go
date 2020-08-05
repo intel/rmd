@@ -385,7 +385,6 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 	var grpName string
 	var err error
 	// Read all the rdtenforce cache and MBA params
-	// reserved := rdtenforce.Reserved // PQOS TODO to be removed
 	targetLev := rdtenforce.TargetLev
 	targetMba := rdtenforce.TargetMba
 	resaall := rdtenforce.Resall
@@ -393,8 +392,6 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 	candidateMba := rdtenforce.CandidateMba
 	changedRes := rdtenforce.ChangedRes
 
-	// PQOS TODO consider assigning COSx directory to workload only when RDT (cache and/or MBA) used.
-	// Number of CLOSes is strictly limited so it's better to not waste it on non-RDT workloads
 	shouldReturnCLOS := false
 	if er.Type == cache.Shared {
 		grpName, err = pqos.GetSharedCLOS()
@@ -408,8 +405,9 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 		return err
 	}
 
-	// check if COS should not be returned to available pool when exiting this function
-	// skip removal if it's shared group
+	// Check if COS should be returned to available pool when exiting this function.
+	// Number of CLOSes is strictly limited so it's better to not waste it on non-RDT workloads
+	// Skip removal if it's shared group
 	defer func() {
 		if shouldReturnCLOS {
 			log.Warn("Releasing unused COS due to error")
@@ -618,7 +616,6 @@ func Release(w *wltypes.RDTWorkLoad) error {
 
 // Update a workload
 func update(w, patched *wltypes.RDTWorkLoad) error {
-
 	// if we change policy/max_cache/min_cache, release current resource group
 	// and re-enforce it.
 	reEnforce := false
@@ -940,14 +937,14 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 				"Could not find the Policy.", err)
 		}
 
-		maxWays, okMax := policy["cache"]["max"].(int)
+		maxWays, okMax := policy["cache"]["max"].(int64)
 		if !okMax {
 			log.Error("Max cache reading error - cache way assignment will be skipped")
 		} else {
 			req.MaxWays = uint32(maxWays)
 		}
 
-		minWays, okMin := policy["cache"]["min"].(int)
+		minWays, okMin := policy["cache"]["min"].(int64)
 		if !okMin {
 			log.Error("Min cache reading error - cache way assignment will be skipped")
 		} else {
@@ -1225,11 +1222,16 @@ func Init() error {
 		if err != nil {
 			return errors.New("Failed to check RDT config in rmd.toml")
 		}
-		forceFlagString := pflag.Lookup("force-config").Value.String()
 		var forceFlag bool
-		if strings.ToLower(forceFlagString) == "true" {
-			forceFlag = true
+		forceFlagVar := pflag.Lookup("force-config")
+		// additional safety check for unit tests (as pflag is not initialized then)
+		if forceFlagVar != nil {
+			forceFlagString := forceFlagVar.Value.String()
+			if strings.ToLower(forceFlagString) == "true" {
+				forceFlag = true
+			}
 		}
+		// end of safety check
 		var invalidWl bool
 		for _, wl := range allWorkloads {
 			// by default assume that workload is OK
