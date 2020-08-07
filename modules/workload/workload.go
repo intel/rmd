@@ -604,14 +604,44 @@ func Release(w *wltypes.RDTWorkLoad) error {
 		}
 	}
 
+	// Additional check needed to properly handle CLOS name for shared group
+	if pqos.IsSharedCLOS(w.CosName) {
+		// TODO consider simplification in future
+		// (it is needed to check if any other shared workload left, maybe some internal structure will be OK)
+		resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
+		r, ok := resaall[w.CosName]
+		if !ok {
+			log.Warningf("Something is wrong with shared CLOS %s - removing from used list", w.CosName)
+			pqos.ReturnClos(w.CosName)
+			return nil
+		}
+
+		r.Tasks = util.SubtractStringSlice(r.Tasks, w.TaskIDs)
+		cpubm, _ := cache.BitmapsCPUWrapper(r.CPUs)
+
+		if len(w.CoreIDs) > 0 {
+			wcpubm, _ := cache.BitmapsCPUWrapper(w.CoreIDs)
+			cpubm = cpubm.Axor(wcpubm)
+		}
+
+		// if shared CLOS still not empty then return without releasing CLOS
+		if len(r.Tasks) > 0 || !cpubm.IsEmpty() {
+			log.Printf("Shared CLOS %s not empty", w.CosName)
+			return cache.SetOSGroup()
+		}
+	}
+
 	// set CLOS cache/MBA to default values
 	if err := proxyclient.ResetCOSParamsToDefaults(w.CosName); err != nil {
 		log.Errorf("%v", err)
 		return nil
 	}
 
+	// return CLOSes pool (as it's non shared or shared empty)
 	pqos.ReturnClos(w.CosName)
-	return nil
+
+	// at the end update OS group (that is COS0 / "." in resctrl FS) accordingly
+	return cache.SetOSGroup()
 }
 
 // Update a workload
@@ -1265,7 +1295,6 @@ func Init() error {
 		}
 	}
 
-	// PQOS TODO Code below proably will not be needed after porting to PQOS
 	if isMbaSupported {
 		isMbaMbpsAvailable = proc.GetMbaMbpsMode()
 		if isMbaMbpsAvailable {

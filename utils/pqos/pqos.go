@@ -30,9 +30,9 @@ import (
 
 //constants for setting MBA to default values
 const (
-	// from documentation math.MaxUint32 BUT there is rounding bug in PQoS
-	// so we must subtract 10 (default step for MBA) to avoid overflow
-	defaultMBpsMBAValue       = math.MaxUint32 - 10
+	// according to documentation it should be math.MaxUint32
+	// BUT due to rounding bug in PQoS "6" has to be subtracted to avoid overflow
+	defaultMBpsMBAValue       = math.MaxUint32 - 6
 	defaultPercentageMBAValue = 100
 )
 
@@ -173,6 +173,15 @@ func AllocateCLOS(res *resctrl.ResAssociation, name string) {
 
 	// don't need to invoke AssocTask/AssocCore code for COS#0
 	if clos == 0 {
+		// Workaround for PQOS issue with setting MBA to "10"
+		mbaMode, err := CheckMBA()
+		if err != nil || mbaMode != 1 {
+			// ignore error here
+			// also do not reset MBA if mode is other than Mbps
+			return
+		}
+		resetMBAToDefaults(0)
+		// end of workaround (to be removed when problem solved in libpqos)
 		return
 	}
 
@@ -251,6 +260,16 @@ func AllocateCLOS(res *resctrl.ResAssociation, name string) {
 		if err != nil {
 			log.Errorf("Failed to set MBA for cos%v. Reason: %v", clos, err)
 		}
+	} else { // 'else' section added only for workaround below
+		// Workaround for PQOS issue with setting MBA to "10"
+		mbaMode, err := CheckMBA()
+		if err != nil || mbaMode != 1 {
+			// ignore error here
+			// also do not reset MBA if mode is other than Mbps
+			return
+		}
+		resetMBAToDefaults(clos)
+		// end of workaround (to be removed when problem solved in libpqos)
 	}
 }
 
@@ -382,6 +401,18 @@ func Finish() error {
 func ResetAPI(mode MBAMode) error {
 	result := C.pqos_wrapper_reset_api(C.int(mode))
 	if result != 0 {
+		// Workaround for PQOS issue with resetting in MBA Mbps mode (launch reset again)
+		if mode == MBAMbps {
+			log.Infof("Trying to reset once more to handle known MBA issue")
+			Finish() // release library resources
+			Init()   // initialize library again
+			result = C.pqos_wrapper_reset_api(C.int(mode))
+			if result != 0 {
+				return fmt.Errorf("Failed to reset PQoS library with error: %v", result)
+			}
+			return nil
+		}
+		// end of workaround (to be removed when problem solved in libpqos)
 		return fmt.Errorf("Failed to reset PQoS library with error: %v", result)
 	}
 	return nil
@@ -582,6 +613,16 @@ func ReturnClos(name string) error {
 	if name == "" || !strings.HasPrefix(name, "COS") {
 		return fmt.Errorf("Invalid clos name given: '%v'", name)
 	}
+
+	// additional check for shared CLOS
+	if strings.Compare(name, sharedCLOS) == 0 {
+		sharedCLOS = ""
+		availableCLOSes = append(availableCLOSes, name)
+		log.Debugf("Shared CLOS '%v' returned to pool", name)
+		return nil
+	}
+
+	// general case for other CLOSes
 	index := 0
 	found := false
 	for index < len(usedCLOSes) {
@@ -633,6 +674,11 @@ func GetSharedCLOS() (string, error) {
 		sharedCLOS = newShared
 	}
 	return sharedCLOS, nil
+}
+
+// IsSharedCLOS returns true if given CLOS name is reserved for shared workloads, false otherwise
+func IsSharedCLOS(name string) bool {
+	return strings.Compare(name, sharedCLOS) == 0
 }
 
 // MarkCLOSasUsed moves given CLOS name from available CLOSes to used CLOSes

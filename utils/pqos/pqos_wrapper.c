@@ -395,6 +395,13 @@ int pqos_wrapper_get_num_of_sockets(int *numOfSockets)
     const struct pqos_cap *p_cap = NULL;
     unsigned l3cat_id_count = 0;
     unsigned *p_l3cat_ids = NULL;
+
+    if (!numOfSockets) {
+        // checking just for safety - in fact it should never happen as function used only internaly
+        debug_print("NULL pointer given to _get_num_of_sockets\n");
+        return PQOS_RETVAL_PARAM;
+    }
+
     /* Get CMT capability and CPU info pointer */
     int ret = pqos_cap_get(&p_cap, &p_cpu);
     if (ret != PQOS_RETVAL_OK)

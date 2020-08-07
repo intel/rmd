@@ -8,14 +8,17 @@ addons:
             - openssl
             - libpam0g-dev
             - db-util
+            - git
 
 go:
     - "1.12"
     - "1.13"
+    - "1.14"
     - "tip"
 
 before_install:
     - if [ "${JOB}" = "check" ]; then go get -v golang.org/x/lint/golint; fi
+    - ( git clone --depth=1 https://github.com/intel/intel-cmt-cat /tmp/pqos && cd /tmp/pqos && make && sudo make install )
 
 script:
     - 'if [ "${JOB}" = "check" ]; then make check; fi'
@@ -36,6 +39,8 @@ jobs:
         - go: "1.12"
           env: JOB=check
         - go: "1.13"
+          env: JOB=check
+        - go: "1.14"
           env: JOB=check
         - go: "tip"
           env: JOB=check
