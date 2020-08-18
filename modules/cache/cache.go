@@ -26,9 +26,11 @@ import (
 
 const (
 	// SysCPUPath is patch of cpu device
-	SysCPUPath       = "/sys/devices/system/cpu/"
+	SysCPUPath = "/sys/devices/system/cpu/"
+	// MaxMBAPercentage max value for MBA in percentage mode (just 100%)
 	MaxMBAPercentage = 100
-	MaxMBAMbps       = 4294967290
+	// MaxMBAMbps max value for MBA in controller (mbps) mode
+	MaxMBAMbps = 4294967290
 )
 
 // SysCache is struct of cache of host

@@ -40,8 +40,8 @@ func SanityCheck() {
 		log.Fatal(msg)
 	}
 	if err := cache.SetOSGroup(); err != nil {
-		// msg := "Error, create OS groups failed! Reason: " + err.Error()
-		// log.Fatal(msg)
+		msg := "Error, create OS groups failed! Reason: " + err.Error()
+		log.Fatal(msg)
 	}
 	if err := cache.SetInfraGroup(); err != nil {
 		msg := "Error, create infra groups failed! Reason: " + err.Error()

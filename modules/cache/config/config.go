@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/spf13/viper"
@@ -26,6 +27,27 @@ type CachePool struct {
 	Besteffort       uint `toml:"besteffort"`
 	Shared           uint `toml:"shared"`
 	Shrink           bool `toml:"shrink"`
+}
+
+// RDTConfig contains RDT related configuration flags from rmd.toml
+type RDTConfig struct {
+	MBAMode string `toml:"mbaMode"`
+}
+
+// MBAModeToInt converts suppored MBA modes (none, percentage or mbps) into PQOS compatible values (-1, 0 and 1 respectively)
+//
+// return error if invalid mode given
+func MBAModeToInt(mode string) (int, error) {
+	switch mode {
+	case "none":
+		return -1, nil
+	case "percentage":
+		return 0, nil
+	case "mbps":
+		return 1, nil
+	default:
+		return -2, fmt.Errorf("Unsupported MBA mode: [%v]", mode)
+	}
 }
 
 var infraConfigOnce sync.Once

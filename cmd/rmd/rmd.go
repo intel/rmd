@@ -14,6 +14,7 @@ import (
 	proxyclient "github.com/intel/rmd/internal/proxy/client"
 	proxyserver "github.com/intel/rmd/internal/proxy/server"
 	proxytypes "github.com/intel/rmd/internal/proxy/types"
+	cacheconf "github.com/intel/rmd/modules/cache/config"
 	util "github.com/intel/rmd/utils"
 	"github.com/intel/rmd/utils/bootcheck"
 	appconf "github.com/intel/rmd/utils/config"
@@ -27,6 +28,7 @@ import (
 	"github.com/intel/rmd/version"
 	loginfo "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 var rmduser = "rmd"
@@ -72,34 +74,35 @@ func main() {
 		}
 		pluginCfg, err := plugins.GetConfig(pluginName)
 		if err != nil {
-			fmt.Println("Failed to load config for plugin", pluginName, "with error:", err.Error())
+			loginfo.Errorf("Failed to load config for plugin %v with error: %v", pluginName, err.Error())
+			exitOnInitError()
 		}
 		pluginPath, ok := pluginCfg["path"]
 		if !ok {
 			// should fail here as without path it's not possible to load plugin
-			fmt.Println("Unable to load", pluginName, "plugin. Please check plugin path")
-			os.Exit(1)
+			loginfo.Errorf("Unable to load %v plugin. Please check plugin path", pluginName)
+			exitOnInitError()
 		}
 		pluginPathString, ok := pluginPath.(string)
 		if !ok {
-			fmt.Println("Unable to load", pluginName, "plugin. Please check plugin path")
-			os.Exit(1)
+			loginfo.Errorf("Unable to load %v plugin. Please check plugin path", pluginName)
+			exitOnInitError()
 		}
 		modIface, err := plugins.Load(pluginPathString)
 		if err != nil {
-			fmt.Println("Failed to load plugin file", pluginPathString, "with error:", err.Error())
-			os.Exit(1)
+			loginfo.Errorf("Failed to load plugin file %v with error: %v", pluginPathString, err.Error())
+			exitOnInitError()
 		}
 		err = modIface.Initialize(pluginCfg)
 		if err != nil {
-			fmt.Println("Failed to load", pluginName, "plugin with error:", err.Error())
-			os.Exit(1)
+			loginfo.Errorf("Failed to load %v plugin with error: %v", pluginName, err.Error())
+			exitOnInitError()
 		}
 
 		err = plugins.Store(pluginName, modIface)
 		if err != nil {
-			fmt.Println("Failed to load", pluginName, "plugin with error:", err.Error())
-			os.Exit(1)
+			loginfo.Errorf("Failed to load %v plugin with error: %v", pluginName, err.Error())
+			exitOnInitError()
 		}
 	}
 
@@ -108,9 +111,77 @@ func main() {
 		os.Exit(1)
 	}
 
+	// WARNING: resctrl module has to be used as sometimes user process tries to read something fro resctrl fs.
+	//          This cannot be replaced with PQOS as PQOS is initialized only in root process
 	if err := resctrl.Init(); err != nil {
 		fmt.Println("resctrl init failed:", err)
 		os.Exit(1)
+	}
+
+	if os.Geteuid() == 0 { // root process - compare platform and rmd.toml
+		// - check which mode is set in config
+		rdtc := cacheconf.RDTConfig{MBAMode: "percentage"} // default value used if not set in config file
+		err := viper.UnmarshalKey("rdt", &rdtc)
+		if err != nil {
+			loginfo.Errorf("Failed to check RDT config in rmd.toml")
+			exitOnInitError()
+		} else {
+			loginfo.Debugf("Configured MBA mode: %v", rdtc.MBAMode)
+		}
+		mbaInt, err := cacheconf.MBAModeToInt(rdtc.MBAMode)
+		if err != nil {
+			loginfo.Errorf("Invalid MBA mode in rmd.toml")
+			exitOnInitError()
+		}
+		forceFlagString := pflag.Lookup("force-config").Value.String()
+		var forceFlag bool
+		if strings.ToLower(forceFlagString) == "true" {
+			forceFlag = true
+		}
+		// Check if MBA is supported on platform and in which mode ONLY WHEN REQUESTED in rmd.toml
+		if mbaInt != -1 {
+			platformMba, err := pqos.CheckMBA()
+			forceReload := false
+			if err != nil {
+				if !forceFlag {
+					loginfo.Errorf("Failed to check MBA mode. Re-launch RMD or launch with '--force-config' to force platform settings")
+					exitOnInitError()
+				}
+				forceReload = true
+			}
+			if platformMba != mbaInt {
+				if !forceFlag {
+					loginfo.Errorf("Requested and currently set MBA mode differ." +
+						"Change settings in rmd.toml, re-mount resctrl filesystem or use '--force-config' flag to force platform settings")
+					exitOnInitError()
+				}
+				forceReload = true
+			}
+			if forceReload {
+				// reset PQoS (re-mount resctrl) to assure proper MBA mode
+				loginfo.Warningf("Resetting PQOS and re-mounting resctrl filesystem")
+				if mbaInt == 0 {
+					err = pqos.ResetAPI(pqos.MBAPercentage)
+				} else {
+					err = pqos.ResetAPI(pqos.MBAMbps)
+				}
+				if err != nil {
+					loginfo.Errorf("Failed to reset PQOS with correct MBA mode: %v", err.Error())
+					exitOnInitError()
+				}
+				// check MBA mode after reset
+				platformMba, err = pqos.CheckMBA()
+				if err != nil {
+					loginfo.Errorf("Failed to check MBA mode in platform: %v", err.Error())
+					exitOnInitError()
+				}
+				// compare again platform MBA mode with configured one
+				if platformMba != mbaInt {
+					loginfo.Errorf("Requested and available MBA mode differ")
+					exitOnInitError()
+				}
+			}
+		}
 	}
 
 	cleanupFunc := func() {
@@ -223,4 +294,10 @@ func main() {
 	bootcheck.SanityCheck()
 	// should tell root process we are fail or success for the santify check
 	RunServer()
+}
+
+// helper function for cleaner code - prints message about initialization error on stdout and exits application
+func exitOnInitError() {
+	fmt.Println("RMD initialization error. Check logs for details")
+	os.Exit(1)
 }

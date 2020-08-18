@@ -12,12 +12,10 @@ import (
 	proxyclient "github.com/intel/rmd/internal/proxy/client"
 	"github.com/intel/rmd/modules/cache/config"
 	util "github.com/intel/rmd/utils/bitmap"
+	"github.com/intel/rmd/utils/pqos"
 	"github.com/intel/rmd/utils/proc"
 	"github.com/intel/rmd/utils/resctrl"
-	"github.com/intel/rmd/utils/pqos"
 )
-
-var groupName = "COS1"
 
 var infraGroupReserve = &Reserved{}
 var infraOnce sync.Once
@@ -114,9 +112,9 @@ func SetInfraGroup() error {
 	level := GetLLC()
 	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
 	ways := GetCosInfo().CbmMaskLen
-	// []string {"COS2", "COS3", "COS4", "COS5", "COS6", "COS7", "COS8", "COS9", "COS10", "COS11", "COS12", "COS13", "COS14", "COS15"}
-	allres := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
-	infraGroup, ok := allres[groupName]
+	// pqos.GetAvailableCLOSes() returns list of CLOSes still available for use
+	allres := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
+	infraGroup, ok := allres[pqos.InfraGoupCOS]
 	if !ok {
 		infraGroup = resctrl.NewResAssociation()
 		l := len(reserve.Schemata)
@@ -161,5 +159,5 @@ func SetInfraGroup() error {
 
 	infraGroup.Tasks = append(infraGroup.Tasks, tasks...)
 
-	return proxyclient.Commit(infraGroup, groupName)
+	return proxyclient.Commit(infraGroup, pqos.InfraGoupCOS)
 }

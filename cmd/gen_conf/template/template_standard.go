@@ -25,6 +25,7 @@ var Options = map[string]interface{}{
 	"sysresctrl":          "/sys/fs/resctrl",
 	"plugins":             "",
 	"dbValidatorInterval": 30, //seconds
+	"mbaMode":             "percentage",
 }
 
 // Templ is content of template
@@ -43,6 +44,9 @@ clientauth = "{{.clientauth}}"  # can be "no, require, require_any, challenge_gi
 # unixsock = "/var/run/rmd.sock"
 plugins = "{{.plugins}}" # comma separated list of enabled RMD plugins, for each plugin (ex. PLUGINX) appropriate config section (ex. [PLUGINX]) is needed
 dbValidatorInterval = {{.dbValidatorInterval}}
+
+[rdt]
+mbaMode = "{{mbaMode}}" # MBA mode of operation, possible options are: "none", "percentage" and "mbps"
 
 [log]
 path = "{{.logfile}}"

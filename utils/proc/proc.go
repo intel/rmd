@@ -107,10 +107,12 @@ var IsMbaAvailable = func() (bool, error) {
 	return parseCPUInfoFile("mba")
 }
 
+// SetMbaMbpsMode stores MBA mode currently supported by rmd
 func SetMbaMbpsMode(flag bool) {
 	isMbaMbpsEnabled = flag
 }
 
+// GetMbaMbpsMode returns MBA mode currently supported by rmd
 func GetMbaMbpsMode() bool {
 	return isMbaMbpsEnabled
 }

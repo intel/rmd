@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -77,14 +78,18 @@ func SetOSGroup() error {
 		return err
 	}
 
-	allres := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
-	// fmt.Println("All res 2nd Commit : ", allres)
-	osGroup := allres["."]
+	allres := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
+	osGroup, ok := allres[pqos.OSGroupCOS]
+	if !ok {
+		return errors.New("OSGroup not found")
+	}
 	// Removing "MB" from the Cache Schemata because it causes error while writing Mbps value
 	// Resctrl bug: approximates(takes the ceil) the given value. When MBA mbps max value given
 	// then it takes the ceil of the value and it goes off range. Hence deleting default MBA values.
-	_, ok := osGroup.CacheSchemata["MB"]
+	_, ok = osGroup.CacheSchemata["MB"]
 	if ok {
+		// PQOS TODO MBA mode is now set in rmd.toml and verified by server
+		// so code below can be replaced with config flag checking
 		for _, v := range osGroup.CacheSchemata["MB"] {
 			if v.Mask > strconv.Itoa(MaxMBAPercentage) {
 				proc.SetMbaMbpsMode(true)
@@ -107,7 +112,8 @@ func SetOSGroup() error {
 
 	level := GetLLC()
 	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
-	schemata, err := GetAvailableCacheSchemata(allres, []string{"COS1", "."}, "none", cacheLevel)
+	schemata, err := GetAvailableCacheSchemata(allres, []string{pqos.InfraGoupCOS, pqos.OSGroupCOS}, "none", cacheLevel)
+
 	if err != nil {
 		return err
 	}
@@ -125,5 +131,6 @@ func SetOSGroup() error {
 
 		osGroup.CacheSchemata[cacheLevel][i].Mask = strconv.FormatUint(1<<uint(len(expectWays))-1, 16)
 	}
-	return proxyclient.Commit(osGroup, ".")
+
+	return proxyclient.Commit(osGroup, pqos.OSGroupCOS)
 }

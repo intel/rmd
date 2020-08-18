@@ -14,8 +14,9 @@ func Register(prefix string, container *restful.Container) {
 
 	err := Init()
 	if err != nil {
-		// just inform user about DB creation failing
-		log.Errorf("Failed to create data base. Reason: %s", err.Error())
+		// Inform user that initialization failed and exit server (user) process.
+		// This will also close root process.
+		log.Fatalf("Failed to initialize workload module: %s", err.Error())
 		return
 	}
 	//no error case - perform registration

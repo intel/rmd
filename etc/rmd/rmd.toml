@@ -16,6 +16,8 @@ title = "RMD config"
 # openstackenable = false # OpenStack integration activation, please read UserGuide for more information
 # dbValidatorInterval = 30 # interval for database validator that checks if process for created workload is still running
 
+[rdt]
+# mbaMode = "percentage" # MBA mode of operation, possible options are: "none", "percentage" (used by default) and "mbps"
 
 [debug]
 # enabled = false # allow rmd to run without any auth with http protocol

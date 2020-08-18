@@ -31,6 +31,7 @@ var Options = map[string]interface{}{
 	"keystoneLogin":       "admin",
 	"keystonePassword":    "nimda",
 	"dbValidatorInterval": 30, //seconds
+	"mbaMode":             "percentage",
 }
 
 // Templ is content of template
@@ -50,6 +51,9 @@ clientauth = "{{.clientauth}}"  # can be "no, require, require_any, challenge_gi
 plugins = "{{.plugins}}" # comma separated list of enabled RMD plugins, for each plugin (ex. PLUGINX) appropriate config section (ex. [PLUGINX]) is needed
 openstackenable = true
 dbValidatorInterval = {{.dbValidatorInterval}}
+
+[rdt]
+mbaMode = "{{mbaMode}}" # MBA mode of operation, possible options are: "none", "percentage" and "mbps"
 
 [log]
 path = "{{.logfile}}"

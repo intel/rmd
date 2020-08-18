@@ -2,8 +2,8 @@ package proxyserver
 
 import (
 	"github.com/intel/rmd/internal/proxy/types"
-	"github.com/intel/rmd/utils/resctrl"
 	"github.com/intel/rmd/utils/pqos"
+	"github.com/intel/rmd/utils/resctrl"
 )
 
 // Commit resource group

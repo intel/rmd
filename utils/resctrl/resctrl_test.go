@@ -8,7 +8,7 @@ import (
 )
 
 func TestGetResAssociation(t *testing.T) {
-	ress := GetResAssociation()
+	ress := GetResAssociation(nil)
 	for name, res := range ress {
 		if name == "CG1" {
 			fmt.Println(name)

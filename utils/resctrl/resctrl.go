@@ -4,6 +4,7 @@ package resctrl
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -17,13 +18,17 @@ import (
 	appConf "github.com/intel/rmd/utils/config"
 )
 
+// internal package variables
 var (
-	// The absolute path to the root of the Intel RDT "resource control" filesystem
 	intelRdtRootLock sync.Mutex
 	intelRdtRoot     string
+)
+
+// variables that can be accessed from the outside of package
+var (
 	// RdtInfo is global immutable variable
 	RdtInfo *map[string]*RdtCosInfo
-	// SysResctrl path
+	// SysResctrl is the absolute path to the root of the Intel RDT "resource control" filesystem
 	SysResctrl string
 )
 
@@ -429,22 +434,67 @@ func RemoveTasks(tasks []string) error {
 	return err
 }
 
-func GetNumOfCLOS() (int, error) {
-	f, err := os.Open(SysResctrl + "/info/L3/num_closids")
-	if err != nil {
-		return -1, err
-	}
-	defer f.Close()
+// GetNumOfCLOS returns number COSes for L3 Cache, MBA or both depending on input params
+// If both L3 Cache and MBA selected function returns lower of two values
+func GetNumOfCLOS(getL3Clos, getMbaClos bool) (int, error) {
 
-	s := bufio.NewScanner(f)
-	var text string
-	for s.Scan() {
-		text = s.Text()
+	if !getL3Clos && !getMbaClos {
+		return 0, errors.New("Invalid input flags for GetNumOfCLOS")
 	}
-	// fmt.Println("text read: ", text)
-	numClos, ok := strconv.Atoi(text)
-	if ok != nil {
-		return -1, ok
+
+	var numL3Clos, numMbaClos int
+	if getL3Clos {
+		l3NumFile, err := os.Open(SysResctrl + "/info/L3/num_closids")
+		if err != nil {
+			return 0, err
+		}
+		defer l3NumFile.Close()
+
+		s := bufio.NewScanner(l3NumFile)
+		var text string
+		for s.Scan() {
+			text = s.Text()
+		}
+
+		numL3Clos, err = strconv.Atoi(text)
+		if err != nil {
+			return 0, err
+		}
 	}
-	return numClos,nil;
+
+	if getMbaClos {
+		mbaNumFile, err := os.Open(SysResctrl + "/info/MB/num_closids")
+		if err != nil {
+			return 0, err
+		}
+		defer mbaNumFile.Close()
+
+		s := bufio.NewScanner(mbaNumFile)
+		var text string
+		for s.Scan() {
+			text = s.Text()
+		}
+
+		numMbaClos, err = strconv.Atoi(text)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// return only number of L3 CLOS
+	if getL3Clos && !getMbaClos {
+		return numL3Clos, nil
+	}
+
+	// return only number of MBA CLOS
+	if getL3Clos && !getMbaClos {
+		return numMbaClos, nil
+	}
+
+	// return lower of L3 CLOS/MBA CLOS
+	if numL3Clos < numMbaClos {
+		return numL3Clos, nil
+	}
+
+	return numMbaClos, nil
 }

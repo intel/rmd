@@ -30,6 +30,9 @@ Default location for main RMD configuration file is: /etc/rmd/rmd.toml
 Below extract from main configuration file (rmd.toml) presents sample Cache module configuration
 
 ```
+[rdt]
+mbaMode = "percentage" # MBA mode of operation, possible options are: "none", "percentage" (used by default) and "mbps"
+
 [OSGroup] # mandatory
 cacheways = 1
 cpuset = "0-1"
@@ -51,6 +54,7 @@ shared = 2
 
 Comments of the directives in the above conf:
 
+* rdt: section for RDT related params like desired MBA mode of operation
 * OSGroup: cache ways reserved for operating system usage.
 * InfraGroup: infrastructure tasks group, user can specify task binary name
               the cache ways will be shared with other workloads
@@ -127,6 +131,7 @@ and is show in table below:
 |    | --conf-dir \<string\> | Directory of config file |
 | -d | --debug | Enable debug |
 |    | --debugport \<int\> | Debug listen port (default 8081) |
+|    | --force-config | Force settings from config file if different than current platform setting. USE THIS OPTION WITH CARE as it can reset *resctrl* and remove workloads with incompatible MBA mode used
 |    | --log-backtrace-at *traceLocation* | when logging hits line file:N, emit a stack trace (default :0) |
 |    | --log-dir \<string\> | If non-empty, write log files in this directory |
 |    | --logtostderr | log to standard error instead of files |
@@ -253,6 +258,25 @@ or *cache* and *mba* if MBA (Memory Bandwidth Allocation) support is available o
 }
 ```
 
+MBA can also work in *controller mode* and specify resource in Mbps:
+```json
+{
+    "task_ids": [ "A validate task id list" ],
+    "core_ids": [ "cpu core list, for the topology, check cache information" ],
+    "policy": "pre-defined policy in RMD",
+    "rdt" : {
+        "cache" : {
+            "max" : "maximum cache ways which can be benefited",
+            "min" : "minimum cache ways which can be benefited"
+        },
+        "mba" : {
+            "mbps" : "MBA assignment in Mbps"
+        }
+    }
+}
+```
+
+
 If some additional plugins are loaded (like *pstate* - external plugin shipped separately) necessary params should be placed in *plugins* section:
 
 ```json
@@ -323,7 +347,20 @@ $ curl -H "Content-Type: application/json" --request POST --data \
         http://127.0.0.1:8081/v1/workloads
 ```
 
-3) Delete a workload by the workload id, you will find it from the
+4) Create workload for CPU cores 4, 5 and 6 with manually specified parameters for Cache and MBA (in default, percentage mode):
+
+```shell
+$ curl -H "Content-Type: application/json" --request POST --data \
+        '{"core_ids" : ["4", "5", "6"],
+            "rdt": {
+                "cache" : {"max": 4, "min": 4 },
+                "mba" : {"percentage" : 70 },
+            },
+        }' \
+        http://127.0.0.1:8081/v1/workloads
+```
+
+5) Delete a workload by the workload id, you will find it from the
 output of the create response.
 
 ```shell

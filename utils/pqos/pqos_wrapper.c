@@ -31,16 +31,17 @@
  * 3. CDM for a particular COS
  * 4. MBA value for a particular COS*/
 
-int pqos_wrapper_init();
+int pqos_wrapper_init(void);
 int pqos_wrapper_check_mba_support(int *mbaMode);
-int pqos_wrapper_finish();
-int pqos_wrapper_reset_api();
+int pqos_wrapper_finish(void);
+int pqos_wrapper_reset_api(int mba_mode);
 int pqos_wrapper_alloc_release(const unsigned *core_array, unsigned int core_amount_in_array);
 int pqos_wrapper_alloc_assign(const unsigned *core_array, unsigned int core_amount_in_array, unsigned *class_id);
 int pqos_wrapper_set_mba_for_common_cos(unsigned classID, int mbaMode, const unsigned *mbaMax, const unsigned *socketsToSetArray, int numOfSockets);
 int pqos_wrapper_alloc_l3cache(unsigned classID, const unsigned *waysMask, const unsigned *socketsToSet, int numOfSockets);
 int pqos_wrapper_assoc_core(const unsigned *classIDs, const unsigned *cores, int numOfCores);
 int pqos_wrapper_assoc_pid(const unsigned *classIDs, const unsigned *tasks, int numOfTasks);
+int pqos_wrapper_get_clos_num(int *l3ca_clos_num, int *mba_clos_num);
 
 // MBA struct type needed to set MBA correctly
 // => REQUESTED - defines what mba value should be applied
@@ -53,7 +54,7 @@ enum mba_type
 };
 
 /*PQOS init*/
-int pqos_wrapper_init()
+int pqos_wrapper_init(void)
 {
     int ret;
     struct pqos_config cfg;
@@ -64,10 +65,13 @@ int pqos_wrapper_init()
     ret = pqos_init(&cfg);
     if (ret != PQOS_RETVAL_OK)
     {
-        debug_print("Error initializing PQoS library!\n");
+        debug_print("Error initializing PQoS library: %d\n", ret);
         ret = pqos_fini();
         if (ret != PQOS_RETVAL_OK)
+        {
+            // just log message for easier debugging
             debug_print("Error shutting down PQoS library!\n");
+        }
         return PQOS_RETVAL_ERROR;
     }
     return PQOS_RETVAL_OK;
@@ -80,7 +84,7 @@ int pqos_wrapper_assoc_core(const unsigned *classIDs, const unsigned *cores, int
     for (int i = 0; i < numOfCores; i++)
     {
         int ret;
-        ret = pqos_alloc_assoc_set(cores[i],classIDs[i]);
+        ret = pqos_alloc_assoc_set(cores[i], classIDs[i]);
         if (ret != PQOS_RETVAL_OK)
         {
             debug_print("assoc_core failed!\n");
@@ -107,7 +111,7 @@ int pqos_wrapper_assoc_pid(const unsigned *classIDs, const unsigned *tasks, int 
 }
 
 /*Allocate L3Cache*/
-int pqos_wrapper_alloc_l3cache(unsigned classID, const unsigned *waysMask,const unsigned *socketsToSet, int numOfSockets)
+int pqos_wrapper_alloc_l3cache(unsigned classID, const unsigned *waysMask, const unsigned *socketsToSet, int numOfSockets)
 {
     const struct pqos_cpuinfo *p_cpu = NULL;
     const struct pqos_cap *p_cap = NULL;
@@ -152,9 +156,8 @@ int pqos_wrapper_alloc_l3cache(unsigned classID, const unsigned *waysMask,const 
 // [out] mbaMode where 0 percentage mode
 //                     1 MBps mode
 //                    -1 MBA is not supported
-// [out] PQOS_RETVAL_OK when no error
-//       PQOS_RETVAL_ERROR when errorr
-int pqos_check_mba_support(int *mbaMode)
+// return PQOS_RETVAL_OK on success, PQOS_RETVAL_ERROR otherwise
+int pqos_wrapper_check_mba_support(int *mbaMode)
 {
     const struct pqos_cap *p_cap = NULL;
     const struct pqos_cpuinfo *p_cpu = NULL;
@@ -164,7 +167,7 @@ int pqos_check_mba_support(int *mbaMode)
     int ret = pqos_cap_get(&p_cap, &p_cpu);
     if (ret != PQOS_RETVAL_OK)
     {
-        printf("Error retrieving PQoS capabilities!\n");
+        debug_print("Error retrieving PQoS capabilities!\n");
         return ret;
     }
 
@@ -187,19 +190,19 @@ int pqos_check_mba_support(int *mbaMode)
 
     if (cap_mba->u.mba != NULL)
     {
-        if (cap_mba->u.mba->ctrl == 0)
+        if (cap_mba->u.mba->ctrl_on == 0)
         {
             debug_print("MBA in percentage mode\n");
             *mbaMode = 0;
         }
-        else if (cap_mba->u.mba->ctrl == 1)
+        else if (cap_mba->u.mba->ctrl_on == 1)
         {
             debug_print("MBA in MBps mode\n");
             *mbaMode = 1;
         }
         else
         {
-            debug_print("MBA in not in MBps or percentage mode\n");
+            debug_print("MBA is not in MBps or percentage mode: %d\n", cap_mba->u.mba->ctrl_on);
             return PQOS_RETVAL_ERROR;
         }
     }
@@ -207,15 +210,38 @@ int pqos_check_mba_support(int *mbaMode)
 }
 
 /*Shuts down PQoS module*/
-int pqos_wrapper_finish()
+int pqos_wrapper_finish(void)
 {
     return pqos_fini();
 }
 
-/*Reset PQoS API*/
-int pqos_wrapper_reset_api()
+/**
+ * Reset PQoS API (library and resctrl filesystem)
+ *
+ * @param[in] mba_mode MBA mode requested for configuration: 0 for "none", 1 for "percentage", 2 for "mbps"
+ *
+ * @return 0 on success, -1 for invalid param, positive value in case of PQOS library error
+ */
+int pqos_wrapper_reset_api(int mba_mode)
 {
-    return pqos_alloc_reset(PQOS_REQUIRE_CDP_ANY, PQOS_REQUIRE_CDP_ANY, PQOS_MBA_ANY);
+    enum pqos_mba_config mba_flag;
+    switch (mba_mode)
+    {
+    case 0:
+        mba_flag = PQOS_MBA_ANY;
+        break;
+    case 1:
+        mba_flag = PQOS_MBA_DEFAULT;
+        break;
+    case 2:
+        mba_flag = PQOS_MBA_CTRL;
+        break;
+    default:
+        debug_print("Unsupported mba_mode for reset: %d\n", mba_mode);
+        return -1;
+        break;
+    }
+    return pqos_alloc_reset(PQOS_REQUIRE_CDP_ANY, PQOS_REQUIRE_CDP_ANY, mba_flag);
 }
 
 /*Reassign cores in core_array to default COS#0 - please be aware that function
@@ -277,7 +303,7 @@ int pqos_wrapper_set_mba_for_common_cos(unsigned classID, int mbaMode, const uns
     {
         mba[REQUESTED].class_id = classID;
         mba[REQUESTED].mb_max = mbaMax[i];
-        mba[REQUESTED].s = mbaMode;
+        mba[REQUESTED].ctrl = mbaMode;
 
         int socket = socketsToSetArray[i];
         ret = pqos_mba_set(p_mba_ids[socket], 1, &mba[REQUESTED], &mba[ACTUAL]);
@@ -290,5 +316,68 @@ int pqos_wrapper_set_mba_for_common_cos(unsigned classID, int mbaMode, const uns
     }
 
     debug_print("MBA allocation success\n");
+    return PQOS_RETVAL_OK;
+}
+
+/**
+ * Function returns number of CLOSes supported by platform for L3 cache allocation and MBA
+ *
+ * @param[out] *l3ca_clos_num number of L3CA CLOSes
+ * @param[out] *mba_clos_num  number of MBA CLOSes
+ *
+ * @return PQOS_RETVAL_OK on success,  PQOS_RETVAL_PARAM on NULL pointer
+ *         or PQOS_RETVAL_ERROR on other error
+ */
+int pqos_wrapper_get_clos_num(int *l3ca_clos_num, int *mba_clos_num)
+{
+    debug_print("Fetching number of CLOS from platform\n");
+    const struct pqos_cap *p_cap = NULL;
+    const struct pqos_cpuinfo *p_cpu = NULL;
+    const struct pqos_capability *p_capability = NULL;
+
+    if (!l3ca_clos_num || !mba_clos_num)
+    {
+        debug_print("NULL param given\n");
+        return PQOS_RETVAL_PARAM;
+    }
+
+    int ret = pqos_cap_get(&p_cap, &p_cpu);
+    if (ret != PQOS_RETVAL_OK)
+    {
+        debug_print("Error retrieving PQoS capabilities!\n");
+        return ret;
+    }
+
+    for (unsigned int i = 0; i < p_cap->num_cap; ++i)
+    {
+        p_capability = &p_cap->capabilities[i];
+        if (p_capability->type == PQOS_CAP_TYPE_L3CA)
+        {
+            if (p_capability->u.l3ca)
+            {
+                debug_print("L3CA found with CLOS number: %d\n", p_capability->u.l3ca->num_classes);
+                *l3ca_clos_num = p_capability->u.l3ca->num_classes;
+            }
+            else
+            {
+                debug_print("L3CA capability found but empty\n");
+                return PQOS_RETVAL_ERROR;
+            }
+        }
+        if (p_capability->type == PQOS_CAP_TYPE_MBA)
+        {
+            if (p_capability->u.mba)
+            {
+                debug_print("MBA found with CLOS number: %d\n", p_capability->u.l3ca->num_classes);
+                *mba_clos_num = p_capability->u.mba->num_classes;
+            }
+            else
+            {
+                debug_print("MBA capability found but empty\n");
+                return PQOS_RETVAL_ERROR;
+            }
+        }
+    }
+
     return PQOS_RETVAL_OK;
 }

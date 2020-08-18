@@ -2,19 +2,22 @@ package pqos
 
 //#cgo CFLAGS: -W -Wall -Wextra -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wold-style-definition -Wpointer-arith -Wcast-qual -Wundef -Wwrite-strings -Wformat -Wformat-security -fstack-protector -fPIE -D_FORTIFY_SOURCE=2 -Wunreachable-code -Wsign-compare -Wno-endif-labels -g -O2
 //#cgo LDFLAGS: -lpqos -lpthread
-//int pqos_wrapper_init();
+//int pqos_wrapper_init(void);
 //int pqos_wrapper_check_mba_support(int *mbaMode);
-//int pqos_wrapper_finish();
-//int pqos_wrapper_reset_api();
+//int pqos_wrapper_finish(void);
+//int pqos_wrapper_reset_api(int mba_mode);
 //int pqos_wrapper_alloc_release(const unsigned *core_array, unsigned int core_amount_in_array);
 //int pqos_wrapper_alloc_assign(const unsigned *core_array, unsigned int core_amount_in_array, unsigned *class_id);
 //int pqos_wrapper_set_mba_for_common_cos(unsigned classID, int mbaMode, const unsigned *mbaMax, const unsigned *socketsToSetArray, int numOfSockets);
 //int pqos_wrapper_alloc_l3cache(unsigned classID, const unsigned *waysMask, const unsigned *socketsToSet, int numOfSockets);
 //int pqos_wrapper_assoc_core(const unsigned *classIDs, const unsigned *cores, int numOfCores);
 //int pqos_wrapper_assoc_pid(const unsigned *classIDs, const unsigned *tasks, int numOfTasks);
+//int pqos_wrapper_get_clos_num(int *l3ca_clos_num, int *mba_clos_num);
 import "C"
 import (
 	"errors"
+	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -22,8 +25,24 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var availableCLOS []string
-var occupiedCLOS []string
+var (
+	availableCLOSes []string
+	usedCLOSes      []string
+	reservedCLOSes  []string
+	sharedCLOS      string
+)
+
+// MBAMode describes selected MBA (Memory Bandwidth Allocation) mode
+type MBAMode int
+
+const (
+	// MBANone means MBA not used by RMD so not needed
+	MBANone MBAMode = iota
+	// MBAPercentage means MBA in percentage (default) mode is used
+	MBAPercentage
+	// MBAMbps means MBA in Mbps mode is used
+	MBAMbps
+)
 
 // MbaStruct contains values needed to set MBA values
 // amount of elements in MbaMaxes must be equal amount of SocketsToSet
@@ -56,62 +75,46 @@ type AssocTasksStruct struct {
 	Tasks    []int // tasks to associate
 }
 
-// StartCLOSPool ...
-func StartCLOSPool() {
-	var numOfclos int
-	numOfclos, err := resctrl.GetNumOfCLOS()
+// names of COSes reserved for special purposes
+// OSGroup is defined as "." instead of "COS0" as some functions are based on filesystem path
+const (
+	// OSGroupCOS
+	OSGroupCOS = "."
+	// InfraGoupCOS
+	InfraGoupCOS = "COS1"
+)
+
+// InitCLOSPool initializes pool of available CLOSes based on number of CLOSes supported by the platform
+func InitCLOSPool() error {
+	// WARNING: Cannot use PQOS function here as this code is launched in user process (in workload initialization)
+	// TODO In future get only necessary number of CLOSes (ex. only L3 or only MBA)
+	numOfClos, err := resctrl.GetNumOfCLOS(true, true)
 	if err != nil {
-		log.Error("Error in resctrl code CLOS: ", err)
-	} else {
-		availableCLOS = make([]string, numOfclos-2)
-		occupiedCLOS = append(occupiedCLOS, []string{"COS0", "COS1"}...)
-		for index := range availableCLOS {
-			availableCLOS[index] = "COS" + strconv.Itoa(index+2)
-		}
-		log.Println(availableCLOS)
+		return fmt.Errorf("Error when fetching number of CLOSes: %v", err.Error())
 	}
-}
-
-// OccupyCLOS ...
-func OccupyCLOS() error {
-	if len(availableCLOS) > 0 {
-		occupiedCLOS = append(occupiedCLOS, availableCLOS[0])
-	} else {
-		log.Error("No Available CLOS\n")
+	reservedCLOSes = []string{OSGroupCOS, InfraGoupCOS}
+	// lists of available and used CLOSes will never have all platform CLOSes as COS0 and COS1 are reserved
+	availableCLOSes = make([]string, 0, numOfClos-2)
+	usedCLOSes = make([]string, 0, numOfClos-2)
+	for index := 2; index < numOfClos; index++ {
+		availableCLOSes = append(availableCLOSes, "COS"+strconv.Itoa(index))
 	}
+	log.Debugf("Available CLOSes %v", availableCLOSes)
 	return nil
 }
 
-// UpdateAvailableCLOS ...
-func UpdateAvailableCLOS() error {
-	if len(availableCLOS) > 1 {
-		availableCLOS = availableCLOS[1:]
-	} else {
-		availableCLOS = availableCLOS[:0]
-	}
-	return nil
+// GetAvailableCLOSes returns list of CLOSes (copy of original) available for use
+func GetAvailableCLOSes() []string {
+	result := make([]string, len(availableCLOSes))
+	copy(result, availableCLOSes)
+	return result
 }
 
-// ErrInCLOS ...
-func ErrInCLOS() {
-	clos := occupiedCLOS[len(occupiedCLOS)-1]
-	occupiedCLOS = occupiedCLOS[:len(occupiedCLOS)-1]
-	availableCLOS = append(availableCLOS, clos)
-}
-
-// GetAvailableCLOS ...
-func GetAvailableCLOS() []string {
-	return availableCLOS
-}
-
-// GetOccupiedCLOS ...
-func GetOccupiedCLOS() []string {
-	return occupiedCLOS
-}
-
-// RecentlyOccupiedCLOS ...
-func RecentlyOccupiedCLOS() string {
-	return occupiedCLOS[len(occupiedCLOS)-1]
+// GetUsedCLOSes returns list of CLOSes already in use (except reserved CLOSes)
+func GetUsedCLOSes() []string {
+	result := make([]string, len(usedCLOSes))
+	copy(result, usedCLOSes)
+	return result
 }
 
 // AllocateCLOS ...
@@ -120,13 +123,19 @@ func AllocateCLOS(res *resctrl.ResAssociation, name string) {
 	// Supported names are only COSx where x is a non-negative value
 	if strings.HasPrefix(name, "COS") && len(name) > 3 {
 		id, err := strconv.Atoi(name[3:])
-		if err != nil || clos < 0 {
-			log.Errorf("Invalid CLOS name given: %v Using COS0 instead.", name)
-			clos = 0
+		if err != nil || id < 0 {
+			log.Errorf("Invalid CLOS number (%v) AllocateCLOS()", name)
+			return
 		}
 		clos = id
 	} else {
-		clos = 0
+		// OSGroupCOS is internally marked by path (so by ".")
+		if name == OSGroupCOS {
+			clos = 0
+		} else {
+			log.Errorf("Invalid CLOS name (%v) given to AllocateCLOS()", name)
+			return
+		}
 	}
 
 	var pid, numPid int
@@ -197,7 +206,7 @@ func Init() error {
 //       1 means that MBA is enabled in MBps mode
 func CheckMBA() (mbaMode int, err error) {
 	var mbaModeAsCInt C.int
-	result := C.pqos_wrapper_check_mba_support((*C.int)(&mbaModeAsCInt))
+	result := C.pqos_wrapper_check_mba_support(&mbaModeAsCInt)
 	mbaMode = int(mbaModeAsCInt)
 
 	if result != 0 {
@@ -206,11 +215,11 @@ func CheckMBA() (mbaMode int, err error) {
 
 	switch mbaMode {
 	case -1:
-		log.Debugf("MBA mode not supported\n")
+		log.Debugf("MBA mode not supported")
 	case 0:
-		log.Debugf("MBA percentage mode enabled\n")
+		log.Debugf("MBA percentage mode enabled")
 	case 1:
-		log.Debugf("MBA in MBps mode enabled\n")
+		log.Debugf("MBA in MBps mode enabled")
 	}
 
 	return mbaMode, nil
@@ -227,10 +236,10 @@ func Finish() error {
 }
 
 /*ResetAPI resets configuration of allocation technologies*/
-func ResetAPI() error {
-	result := C.pqos_wrapper_reset_api()
+func ResetAPI(mode MBAMode) error {
+	result := C.pqos_wrapper_reset_api(C.int(mode))
 	if result != 0 {
-		return errors.New("Failed to reset PQoS configuration of allocation technologies")
+		return fmt.Errorf("Failed to reset PQoS library with error: %v", result)
 	}
 	return nil
 }
@@ -300,7 +309,8 @@ func SetMbaForSingleCos(mbaValuesToSet MbaStruct) error {
 	for _, s := range mbaValuesToSet.SocketsToSet {
 		socketsToSetAsUInts = append(socketsToSetAsUInts, C.uint(s))
 	}
-	result := C.pqos_wrapper_set_mba_for_common_cos(C.uint(mbaValuesToSet.ClassID), C.int(mbaValuesToSet.MbaMode), &(mbaMaxesAsUInts[0]), &(socketsToSetAsUInts[0]), C.int(numOfElements))
+	result := C.pqos_wrapper_set_mba_for_common_cos(C.uint(mbaValuesToSet.ClassID),
+		C.int(mbaValuesToSet.MbaMode), &(mbaMaxesAsUInts[0]), &(socketsToSetAsUInts[0]), C.int(numOfElements))
 
 	if result != 0 {
 		return errors.New("Failed to set MBA for common COS")
@@ -390,4 +400,112 @@ func AssocTask(tasksStruct AssocTasksStruct) error {
 		return errors.New("Failed to associate specified cores with given class IDs")
 	}
 	return nil
+}
+
+// GetNumOfCLOSes returns number of Class Of Services supported by platform
+// Function params (cache and mba) allows to select whether function shall check
+// number of CLOSes for L3 Cache Allocation, Memory Bandwidth Allocation or both
+// (minimum of two values are then returned)
+func GetNumOfCLOSes(cache, mba bool) (int, error) {
+	var l3ClosNum, mbaClosNum C.int
+
+	if !cache && !mba {
+		return 0, errors.New("Invalid selection of capabilities for fetching number of CLOSes")
+	}
+
+	result := C.pqos_wrapper_get_clos_num(&l3ClosNum, &mbaClosNum)
+
+	userID := os.Geteuid()
+	if result != 0 {
+		return 0, fmt.Errorf("Error when checking number of CLOSes in platform as user: %v", userID)
+	}
+
+	if cache && !mba {
+		return int(l3ClosNum), nil
+	}
+
+	if !cache && mba {
+		return int(mbaClosNum), nil
+	}
+
+	// both flags defined so return lower value
+	if l3ClosNum < mbaClosNum {
+		return int(l3ClosNum), nil
+	}
+	return int(mbaClosNum), nil
+}
+
+// UseAvailableCLOS takes one CLOS name from list of available ones, moves it to used CLOSes and returns it's name
+// If no available CLOS found then empty name and non-nil error is returned
+func UseAvailableCLOS() (string, error) {
+	// PQOS TODO Add locks for thread safety
+	if len(availableCLOSes) < 1 {
+		return "", errors.New("No free CLOS available")
+	}
+	result := availableCLOSes[0]
+	availableCLOSes = availableCLOSes[1:] // remove 1st element
+	log.Debugf("Used CLOS %v Available CLOS: %v", result, availableCLOSes)
+	usedCLOSes = append(usedCLOSes, result)
+	return result, nil
+}
+
+// ReturnClos moves CLOS with given name from used list into available list
+func ReturnClos(name string) error {
+	// PQOS TODO Add locks for thread safety
+	// perform some basic checks for easier debugging
+	if name == "" || !strings.HasPrefix(name, "COS") {
+		return fmt.Errorf("Invalid clos name given: '%v'", name)
+	}
+	index := 0
+	found := false
+	for index < len(usedCLOSes) {
+		if usedCLOSes[index] == name {
+			found = true
+			break
+		}
+		index++
+	}
+	if !found {
+		return fmt.Errorf("CLOS '%v' not found on list of used CLOSes", name)
+	}
+	// return CLOS name to available list ...
+	availableCLOSes = append(availableCLOSes, name)
+	// ... and remove it from used list
+	switch index {
+	case 0:
+		// remove first item
+		usedCLOSes = usedCLOSes[1:]
+	case len(usedCLOSes) - 1:
+		// remove last item
+		usedCLOSes = usedCLOSes[:len(usedCLOSes)-2]
+	default:
+		// remove some middle item
+		copy(usedCLOSes[index:], usedCLOSes[index+1:])
+		usedCLOSes = usedCLOSes[:len(usedCLOSes)-1]
+	}
+	log.Debugf("CLOS '%v' removed from list of used CLOSes", name)
+	return nil
+}
+
+// GetNumberOfFreeCLOSes returns number of CLOS that are available to use
+func GetNumberOfFreeCLOSes() int {
+	return len(availableCLOSes)
+}
+
+// Shared COS (shared group) is one for all workloads with "shared" type
+// This group should be created when needed first time and re-used after that
+
+// GetSharedCLOS returns name assigned to shared workloads COS.
+// If shared COS have not been reserved yet function tries to reserve it
+func GetSharedCLOS() (string, error) {
+	// PQOS TODO Should implement thread-safe version
+	if sharedCLOS == "" {
+		// have to reserve new COS
+		newShared, err := UseAvailableCLOS()
+		if err != nil {
+			return "", errors.New("No free CLOS left to create shared group")
+		}
+		sharedCLOS = newShared
+	}
+	return sharedCLOS, nil
 }

@@ -37,6 +37,9 @@ There are some sample configuration files could be found [here](../etc/rmd).
 * dbValidatorInterval: Interval between workload database validation in seconds, by default it's 30s. Validator is used to periodically check db
 and remove all workloads related to system processes if all those processes doesn't exist anymore (so such workload will stay in db if at least one process still exists). Validator doesn't have impact on workloads related to CPU cores only.
 
+### [rdt] section
+* mbaMode: MBA (Memory Bandwidth Allocation) mode of operation supported by RMD, possible options are: "none", "percentage" and "mbps"
+
 ### [debug] section
 * enabled: true to enable debug mode, will listen as http protocol, only for testing.
 * debugport: when enabled=ture, http protocal will listen on this.
@@ -130,7 +133,7 @@ This file contains policies for Cache plugin (catpolicy) and optional P-State pl
 Policy (tier) can be selected during workload creation. If 'policy' given in workload description during creation (POST) or update (PATCH) request then manualy specified parameters
 are ignored.
 
-Polocy file path is configured in `rmd.toml` default section as `policypath` option. RMD currently supports yaml, toml as a policy file format.
+Policy file path is configured in `rmd.toml` default section as `policypath` option. RMD currently supports yaml, toml as a policy file format.
 
 ## cpu_map.toml
 

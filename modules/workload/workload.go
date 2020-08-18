@@ -14,13 +14,16 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 
 	"github.com/intel/rmd/internal/plugins"
 	proxyclient "github.com/intel/rmd/internal/proxy/client"
 	"github.com/intel/rmd/modules/cache"
+	cacheconf "github.com/intel/rmd/modules/cache/config"
 	"github.com/intel/rmd/utils/cpu"
-	"github.com/intel/rmd/utils/resctrl"
 	"github.com/intel/rmd/utils/pqos"
+	"github.com/intel/rmd/utils/resctrl"
 
 	libutil "github.com/intel/rmd/utils/bitmap"
 	"github.com/intel/rmd/utils/proc"
@@ -249,16 +252,13 @@ func validate(w *wltypes.RDTWorkLoad) error {
 }
 
 func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *wltypes.RDTEnforce) error {
-
-	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
+	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
 
 	// log.Println("Resall : ", resaall)
 
 	targetLev := strconv.FormatUint(uint64(cache.GetLLC()), 10)
-	// log.Printf("targetLev",targetLev)
-	// []string{"COS1", "COS0"}
-	av, err := cache.GetAvailableCacheSchemata(resaall, []string{"COS1", "."}, er.Type, "L"+targetLev)
-	// log.Printf("av",*av["0"],*av["1"])
+	av, err := cache.GetAvailableCacheSchemata(resaall, []string{pqos.InfraGoupCOS, pqos.OSGroupCOS}, er.Type, "L"+targetLev)
+
 	if err != nil {
 		return rmderror.AppErrorf(http.StatusInternalServerError,
 			"Unable to read cache schemata; %s", err.Error())
@@ -354,9 +354,9 @@ func enforceMba(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 	if er.UseCache {
 		availableSchemata = rdtenforce.AvailableSchemata
 	} else {
-		resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
+		resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
 		targetLev := strconv.FormatUint(uint64(cache.GetLLC()), 10)
-		availableSchemata, err = cache.GetAvailableCacheSchemata(resaall, []string{"COS1", "."}, "none", "L"+targetLev)
+		availableSchemata, err = cache.GetAvailableCacheSchemata(resaall, []string{pqos.InfraGoupCOS, pqos.OSGroupCOS}, "none", "L"+targetLev)
 		if err != nil {
 			return rmderror.AppErrorf(http.StatusInternalServerError,
 				"Unable to read cache schemata; %s", err.Error())
@@ -381,22 +381,48 @@ func enforceMba(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 }
 
 func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *wltypes.RDTEnforce) error {
-
 	var resAss *resctrl.ResAssociation
 	var grpName string
 	var err error
 	// Read all the rdtenforce cache and MBA params
-	reserved := rdtenforce.Reserved
+	// reserved := rdtenforce.Reserved // PQOS TODO to be removed
 	targetLev := rdtenforce.TargetLev
 	targetMba := rdtenforce.TargetMba
 	resaall := rdtenforce.Resall
 	candidateCache := rdtenforce.CandidateCache
 	candidateMba := rdtenforce.CandidateMba
 	changedRes := rdtenforce.ChangedRes
+
+	// PQOS TODO consider assigning COSx directory to workload only when RDT (cache and/or MBA) used.
+	// Number of CLOSes is strictly limited so it's better to not waste it on non-RDT workloads
+	shouldReturnCLOS := false
+	if er.Type == cache.Shared {
+		grpName, err = pqos.GetSharedCLOS()
+	} else {
+		grpName, err = pqos.UseAvailableCLOS()
+		shouldReturnCLOS = true
+	}
+
+	if err != nil {
+		log.Debugf("Failed to reserve CLOS: %v", err.Error())
+		return err
+	}
+
+	// check if COS should not be returned to available pool when exiting this function
+	// skip removal if it's shared group
+	defer func() {
+		if shouldReturnCLOS {
+			log.Warn("Releasing unused COS due to error")
+			pqos.ReturnClos(w.CosName)
+			w.CosName = ""
+		} else {
+			log.Debug("Exiting Enforce with success")
+		}
+	}()
+
 	// If cache is used
 	if er.UseCache {
 		if er.Type == cache.Shared {
-			grpName = pqos.RecentlyOccupiedCLOS()
 			if res, ok := resaall[grpName]; !ok {
 				resAss = newResAss(candidateCache, targetLev)
 			} else {
@@ -404,27 +430,13 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 			}
 		} else {
 			resAss = newResAss(candidateCache, targetLev)
-			if len(w.TaskIDs) > 0 {
-				grpName = pqos.RecentlyOccupiedCLOS()
-			} else if len(w.CoreIDs) > 0 {
-				grpName = pqos.RecentlyOccupiedCLOS()
-			}
 		}
 	}
 	// If Mba is used
 	if er.UseMba {
+		// shared cache group is not allowed when MBA in use
 		if er.Type == cache.Shared {
-			grpName = reserved[cache.Shared].Name
-		} else {
-			if er.Type == cache.Besteffort {
-				grpName = pqos.RecentlyOccupiedCLOS()
-			} else {
-				if len(w.TaskIDs) > 0 {
-					grpName = pqos.RecentlyOccupiedCLOS()
-				} else if len(w.CoreIDs) > 0 {
-					grpName = pqos.RecentlyOccupiedCLOS()
-				}
-			}
+			return errors.New("MBA forbidden for shared group")
 		}
 		resAss = newResAssForMba(resAss, candidateMba, targetMba)
 	}
@@ -447,11 +459,9 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 			"Error to commit resource group for workload.", err)
 	}
 
-	// log.Println("Changed Res : ",changedRes)
-
 	// loop to change shrunk resource
 	// TODO: there's corners if there are multiple changed resource groups,
-	// but we failed to commit one of them (worest case is the last group),
+	// but we failed to commit one of them (worst case is the last group),
 	// there's no rollback.
 	// possible fix is to adding this into a task flow
 	for name, res := range changedRes {
@@ -464,8 +474,6 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 		}
 	}
 
-	pqos.UpdateAvailableCLOS()
-
 	// reset os group
 	if err = cache.SetOSGroup(); err != nil {
 		log.Errorf("Error while try to commit resource group for default group")
@@ -475,6 +483,8 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 	}
 
 	log.Debug("Setting cos_name to: ", grpName)
+	// no errors till now - remove CLOS returning (releasing) flag
+	shouldReturnCLOS = false
 	w.CosName = grpName
 	return nil
 }
@@ -482,8 +492,6 @@ func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *
 // Enforce a user request workload based on defined policy
 func Enforce(w *wltypes.RDTWorkLoad) error {
 	w.Status = wltypes.Failed
-
-	pqos.OccupyCLOS()
 
 	l.Lock()
 	defer l.Unlock()
@@ -547,7 +555,7 @@ func Release(w *wltypes.RDTWorkLoad) error {
 	l.Lock()
 	defer l.Unlock()
 
-	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
+	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
 
 	r, ok := resaall[w.CosName]
 
@@ -600,6 +608,7 @@ func Release(w *wltypes.RDTWorkLoad) error {
 		if err := proxyclient.DestroyResAssociation(w.CosName); err != nil {
 			return err
 		}
+		pqos.ReturnClos(w.CosName)
 		return cache.SetOSGroup()
 	}
 	// remove workload task ids from resource group
@@ -610,6 +619,7 @@ func Release(w *wltypes.RDTWorkLoad) error {
 		}
 	}
 
+	pqos.ReturnClos(w.CosName)
 	if len(w.CoreIDs) > 0 {
 		r.CPUs = cpubm.ToString()
 		return proxyclient.Commit(r, w.CosName)
@@ -789,7 +799,7 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 
 	l.Lock()
 	defer l.Unlock()
-	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOS())
+	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
 
 	if !reflect.DeepEqual(patched.CoreIDs, w.CoreIDs) ||
 		!reflect.DeepEqual(patched.TaskIDs, w.TaskIDs) {
@@ -873,7 +883,6 @@ func inCacheList(socket uint32, socketList []uint32) bool {
 }
 
 func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad) error {
-
 	w.Status = wltypes.None
 	cpubitstr := ""
 	if len(w.CoreIDs) >= 0 {
@@ -1208,7 +1217,49 @@ func Init() error {
 	if err != nil {
 		return err
 	}
-	pqos.StartCLOSPool()
+	// Additional check for MBA mode (configured vs. used in workloads in db) needed due to 2 MBA modes and PQOS usage
+	// NOTE TODO: In future it will be good to validate param of each plugin (including RDT) used in stored workloads
+	// - get all stored workloads
+	allWorkloads, err := workloadDatabase.GetAllWorkload()
+	if err != nil {
+		return fmt.Errorf("Failed to get data from DB during workload.Init(): %v", err.Error())
+	}
+	if len(allWorkloads) > 0 {
+		// - get configured MBA mode
+		rdtc := cacheconf.RDTConfig{MBAMode: "percentage"} // default value used if not set in config file
+		err = viper.UnmarshalKey("rdt", &rdtc)
+		if err != nil {
+			return errors.New("Failed to check RDT config in rmd.toml")
+		}
+		forceFlagString := pflag.Lookup("force-config").Value.String()
+		var forceFlag bool
+		if strings.ToLower(forceFlagString) == "true" {
+			forceFlag = true
+		}
+		var invalidWl bool
+		for _, wl := range allWorkloads {
+			// by default assume that workload is OK
+			invalidWl = false
+			if wl.Rdt.Mba.Percentage != nil && rdtc.MBAMode != "percentage" {
+				// mark as invalid
+				invalidWl = true
+			}
+			if wl.Rdt.Mba.Mbps != nil && rdtc.MBAMode != "mbps" {
+				// mark as invalid
+				invalidWl = true
+			}
+			if invalidWl {
+				// if force flag set - remove workload, otherwise return with error
+				if forceFlag {
+					// delete workload from database (it should be already removed from platform by root process)
+					log.Warningf("Workload %v contains incorrect MBA mode - removing from database", wl.ID)
+					workloadDatabase.DeleteWorkload(&wl)
+				} else {
+					return fmt.Errorf("Workload in database contains MBA setting (percentage) not compatible with current configuration (%v)", rdtc.MBAMode)
+				}
+			}
+		}
+	}
 
 	if isMbaSupported {
 		isMbaMbpsAvailable = proc.GetMbaMbpsMode()
@@ -1218,7 +1269,6 @@ func Init() error {
 			mbaMaxValue = cache.MaxMBAPercentage
 		}
 	}
-
 	return err
 }
 
