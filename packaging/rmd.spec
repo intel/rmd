@@ -12,6 +12,7 @@ Source1:        rmd-extra.pkg.tar.gz
 
 BuildRequires:  go
 BuildRequires:  make
+BuildRequires:  intel-cmt-cat-devel
 BuildRequires:  pam-devel
 BuildRequires:  systemd
 BuildRequires:  systemd-rpm-macros
@@ -24,7 +25,6 @@ BuildRequires:  golang-github-fatih-structs-devel
 BuildRequires:  golang-github-globalsign-mgo-devel
 BuildRequires:  golang-github-gobwas-glob-devel
 BuildRequires:  golang-github-glog-devel
-BuildRequires:  golang-github-protobuf
 BuildRequires:  golang-github-gopherjs-devel
 BuildRequires:  golang-github-hashicorp-hcl-devel
 BuildRequires:  golang-github-jtolds-gls-devel

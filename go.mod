@@ -37,6 +37,7 @@ require (
 	github.com/yudai/gojsondiff v1.0.0 // indirect
 	github.com/yudai/golcs v0.0.0-20170316035057-ecda9a501e82 // indirect
 	github.com/yudai/pp v2.0.1+incompatible // indirect
+	github.com/golang/protobuf v0.0.0-20170902000452-17ce1425424a // indirect
 	golang.org/x/sys v0.0.0-20200519105757-fe76b779f299
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/gavv/httpexpect.v1 v1.0.0-20170328075429-d852bb8255b6
