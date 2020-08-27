@@ -3,7 +3,7 @@
 ## Prepare GO development environment
 
 Follow https://golang.org/doc/install to install golang.
-Make sure you have your $GOPATH, $PATH setup correctly
+Make sure you have your \$GOPATH, \$PATH setup correctly
 
 *Note: only support build RMD on linux host(GOOS=Linux)*
 
@@ -15,7 +15,7 @@ export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 go env
 ```
 
-As RMD is prepared as "Go module", it needs at least Go 1.11 version to be build properly. However, it is highly recommended to use version not lower than 1.13 due to multiple bugs fixed in the standard library.
+RMD has been developed, build and tested using Go 1.13 and this version is a minimal required for RMD compilation. However, it is highly recommended to use newest available 1.x version (1.15 at the time of RMD v0.3 release) due to continuous bug fixing and improvements of the standard library.
 
 ## Get rmd
 
@@ -56,6 +56,14 @@ sudo make install
 # RMD will be installed into /usr/local/sbin/ 
 # Default configuration files will be placed under /etc/rmd
 ```
+
+RMD can be also build with Openstack integration support. To prepare *rmd* and *gen_conf* binaries with built-in Openstack code use additional make flag:
+
+```bash
+make BUILD_TYPE=openstack
+```
+
+Additional Openstack related sections in *rmd.toml* should be filled according to local Openstack environment configuration.
 
 ## Run rmd
 
