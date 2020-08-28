@@ -1,5 +1,17 @@
 # Resource Management Daemon changelog
 
+## Version 0.3
+
+### Bugfixing and design change
+
+List of changes
+- add support for MBA
+- enabling usage of external plugins
+- update documentation
+- cleaned code and fixed bugs
+- Docker file update
+- fixes for Fedora packaging review
+
 ## Version 0.2
 
 ### Bugfixing and design change

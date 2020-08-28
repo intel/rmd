@@ -4,13 +4,15 @@ package integration_test
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"net/http"
 	"os"
 
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
 	testhelpers "github.com/intel/rmd/test/test_helpers"
 	util "github.com/intel/rmd/utils/bitmap"
+	"github.com/intel/rmd/utils/proc"
 	"github.com/intel/rmd/utils/resctrl"
 	"gopkg.in/gavv/httpexpect.v1"
 )
@@ -18,12 +20,20 @@ import (
 var _ = Describe("Workload", func() {
 
 	var (
-		he *httpexpect.Expect
+		he              *httpexpect.Expect
+		isMbaSupported  bool
+		defaultMbaValue int
 	)
 
 	BeforeEach(func() {
 		workloadUrl := v1url + "workloads"
 		he = httpexpect.New(GinkgoT(), workloadUrl)
+		isMbaSupported, _ = proc.IsMbaAvailable()
+		if isMbaSupported {
+			defaultMbaValue = 100
+		} else {
+			defaultMbaValue = -1
+		}
 	})
 
 	AfterEach(func() {
@@ -41,61 +51,81 @@ var _ = Describe("Workload", func() {
 		Context("When request a new workload API with max_cache = min_cache and task id", func() {
 			It("Should return 200", func() {
 				data := testhelpers.AssembleRequest(
-					Pids, []string{}, 1, 1, "")
-				verifyWrokload(he, data)
+					Pids, []string{}, 1, 1, defaultMbaValue, "")
+				verifyWrokload(he, data, isMbaSupported)
 			})
 		})
-
+		// MBA not supported for shared group
 		Context("When request a new workload API with max_cache = min_cache and cpus", func() {
-			It("Should return 200", func() {
+			It("Should return 500", func() {
 
 				data := testhelpers.AssembleRequest(
-					[]*os.Process{}, []string{"4-5"}, 1, 1, "")
-				verifyWrokload(he, data)
+					[]*os.Process{}, []string{"4-5"}, 1, 1, defaultMbaValue, "")
+				verifyWrokload(he, data, isMbaSupported)
 			})
 		})
 
 		Context("When request a new workload API with max_cache > min_cache and cpus", func() {
 			It("Should return 200", func() {
 				data := testhelpers.AssembleRequest(
-					[]*os.Process{}, []string{"4-5"}, 2, 1, "")
-				verifyWrokload(he, data)
+					[]*os.Process{}, []string{"4-5"}, 2, 1, defaultMbaValue, "")
+				verifyWrokload(he, data, isMbaSupported)
 			})
 		})
-
+		// MBA not supported for shared group at current version
+		// TODO PQOS: change this test when shared group will be supported
 		Context("When request a new workload API with max_cache = min_cache = 0 and cpus", func() {
-			It("Should return 200", func() {
+			It("Should return 500", func() {
 				data := testhelpers.AssembleRequest(
-					[]*os.Process{}, []string{"4-5"}, 0, 0, "")
-				verifyWrokload(he, data)
+					[]*os.Process{}, []string{"4-5"}, 0, 0, defaultMbaValue, "")
+				he.POST("/").WithHeader("Content-Type", "application/json").
+					WithJSON(data).
+					Expect().
+					Status(http.StatusInternalServerError)
 			})
 		})
 
 		Context("When request a new workload API with pid which doesn't exist ", func() {
 			It("Should return 400", func() {
 				data := testhelpers.AssembleRequest(
-					[]*os.Process{&os.Process{Pid: 199999}}, []string{"4-5"}, 0, 0, "")
+					[]*os.Process{&os.Process{Pid: 199999}}, []string{"4-5"}, 0, 0, defaultMbaValue, "")
 				he.POST("/").WithHeader("Content-Type", "application/json").
 					WithJSON(data).
 					Expect().
 					Status(http.StatusBadRequest)
 			})
 		})
+
+		Context("When request a new workload API with cache and MBA values", func() {
+			It("Should return 200", func() {
+				if isMbaSupported {
+					data := testhelpers.AssembleRequest(
+						[]*os.Process{}, []string{"4-5"}, 2, 2, 50, "")
+					verifyWrokload(he, data, isMbaSupported)
+				} else {
+					fmt.Println("Machine does not suport MBA. So Aborting!!!!")
+				}
+			})
+		})
 	})
 })
 
-func verifyWrokload(he *httpexpect.Expect, data map[string]interface{}) {
+func verifyWrokload(he *httpexpect.Expect, data map[string]interface{}, isMbaSupported bool) {
 	repobj := he.POST("/").WithHeader("Content-Type", "application/json").
 		WithJSON(data).
 		Expect().
 		Status(http.StatusCreated).JSON().Object()
 
 	fmt.Println("Response :", repobj)
-	fmt.Println("CACHE: ", repobj.Value("cache"), data["cache"])
+	fmt.Println("CACHE: ", repobj.Value("rdt").Object().Value("cache"), data["rdt"].(map[string]interface{})["cache"])
+	// print plugins only if used int data (so expected also in json result)
+	if plugs, ok := data["plugins"]; ok {
+		fmt.Println("PLUGINS: ", repobj.Value("plugins"), plugs)
+	}
 
 	workloadId := repobj.Value("id").String().Raw()
 	cosName := repobj.Value("cos_name").String().Raw()
-	resall := resctrl.GetResAssociation()
+	resall := resctrl.GetResAssociation(nil)
 
 	fmt.Println("Resall : ", resall, resall[cosName])
 
@@ -103,12 +133,19 @@ func verifyWrokload(he *httpexpect.Expect, data map[string]interface{}) {
 	if p, ok := data["policy"]; ok {
 		repobj.Value("policy").Equal(p)
 	} else {
-		repobj.Value("cache").Equal(data["cache"])
+		// validate plugins only if used in data (so expected also in json result)
+		if plugs, ok := data["plugins"]; ok {
+			repobj.Value("plugins").Equal(plugs)
+		}
+		repobj.Value("rdt").Object().Value("cache").Equal(data["rdt"].(map[string]interface{})["cache"])
+		if isMbaSupported {
+			repobj.Value("rdt").Object().Value("mba").Equal(data["rdt"].(map[string]interface{})["mba"])
+		}
 	}
 
 	res, ok := resall[cosName]
 	if !ok {
-		Fail(fmt.Sprintf("Resource group %s was not created correctlly", cosName))
+		Fail(fmt.Sprintf("Resource group %s was not created correctly", cosName))
 	}
 
 	if tids, ok := data["task_ids"]; ok {
@@ -129,7 +166,7 @@ func verifyWrokload(he *httpexpect.Expect, data map[string]interface{}) {
 		Ω(rescpubm.ToHumanString()).Should(Equal(cpubm.ToHumanString()))
 	}
 
-	if maxCache, ok := data["cache"].(map[string]int)["max"]; ok && maxCache == 0 {
+	if maxCache, ok := data["rdt"].(map[string]interface{})["cache"].(map[string]int)["max"]; ok && maxCache == 0 {
 		repobj.Value("cos_name").Equal("shared")
 	}
 

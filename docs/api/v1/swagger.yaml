@@ -2,7 +2,7 @@ swagger: '2.0'
 info:
   title: RMD API
   description: Resource Management Daemon API specification
-  version: "0.2.0"
+  version: "0.3.0"
   contact:
     name: RMD API Support
     url: http://www.rmd.org
@@ -83,9 +83,6 @@ paths:
               cache:
                 max: 4
                 min: 2
-              pstate:
-                ratio: 0.7
-                monitoring: "on"
       responses:
         201:
           description: New Workload object created
@@ -149,8 +146,6 @@ paths:
             cache:
               max: 4
               min: 2
-            pstate:
-              monitoring: "off"
       responses:
         200:
           description: Workload object
@@ -185,7 +180,7 @@ paths:
     get:
       summary: List pre-defined workload policies for submodules
       description: |
-        List pre-defined policies for cache and pstate module (if enabled)
+        List pre-defined policies for all defined modules
       tags:
         - policy
       responses:
@@ -193,38 +188,6 @@ paths:
           description: list of pre-defined policies
           schema:
             $ref: '#/definitions/Policy'
-  /pstate:
-    get:
-      summary: List of all Pstate configurations
-      description: |
-        Get list of P-State configurations for all available cores. This endpoint needs external RMD plugin configured and loaded.
-      tags:
-        - pstate
-      responses:
-        200:
-          description: List of Pstate objects
-          schema:
-            type: array
-            items:
-              $ref: '#/definitions/Pstate'
-  /pstate/{core_id}:
-    get:
-      summary: Pstate configuration for core with given id
-      description: |
-        Get P-State configuration for CPU core defined by id.
-      parameters:
-      - name: core_id
-        in: path
-        description: CPU core id
-        required: true
-        type: string
-      tags:
-        - pstate
-      responses:
-        200:
-          description: Pstate configuration object
-          schema:
-            $ref: '#/definitions/Pstate'
 definitions:
   CacheSummary:
     type: object
@@ -298,14 +261,6 @@ definitions:
       cos_name:
         description: Corresponding Class Of Service name
         type: string
-      pstate:
-        description: Parameters of external P-State plugin
-        type: object
-        properties:
-          ratio:
-            type: number
-          monitoring:
-            type: string
       cache:
         description: Cache ways assignments configuration
         type: object
@@ -331,18 +286,11 @@ definitions:
         type: integer
       min:
         type: integer
-  PstatePolicy:
-    type: object
-    properties:
-      ratio:
-        type: number
   ComplexPolicy:
     type: object
     properties:
       cache:
         $ref: '#/definitions/CachePolicy'
-      pstate:
-        $ref: '#/definitions/PstatePolicy'
   Policy:
     type: object
     properties:
@@ -352,15 +300,3 @@ definitions:
         $ref: '#/definitions/ComplexPolicy'
       bronze:
         $ref: '#/definitions/ComplexPolicy'
-  Pstate:
-    type: object
-    properties:
-      core_id:
-        type: integer
-        description: number of CPU core [0-...]
-      monitoring:
-        type: string
-        description: core monitoring activation flag ("on" or "off")
-      ratio_threshold:
-        type: number
-        description: CPU branch-miss/branch-hits ratio threshold

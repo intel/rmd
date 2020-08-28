@@ -32,15 +32,17 @@ const (
 // Default is the configuration in default section of config file
 // TODO consider create a new struct for TLSConfig
 type Default struct {
-	Address         string `toml:"address"`
-	TLSPort         uint   `toml:"tlsport"`
-	CertPath        string `toml:"certpath"`
-	ClientCAPath    string `toml:"clientcapath"`
-	ClientAuth      string `toml:"clientauth"`
-	UnixSock        string `toml:"unixsock"`
-	PolicyPath      string `toml:"policypath"`
-	OpenStackEnable bool   `toml:"openstackenable"`
-	SysResctrl      string `toml:"sysresctrl"`
+	Address             string `toml:"address"`
+	TLSPort             uint   `toml:"tlsport"`
+	CertPath            string `toml:"certpath"`
+	ClientCAPath        string `toml:"clientcapath"`
+	ClientAuth          string `toml:"clientauth"`
+	UnixSock            string `toml:"unixsock"`
+	PolicyPath          string `toml:"policypath"`
+	OpenStackEnable     bool   `toml:"openstackenable"`
+	SysResctrl          string `toml:"sysresctrl"`
+	Plugins             string `toml:"plugins"`
+	DbValidatorInterval uint   `toml:"dbValidatorInterval"`
 }
 
 // Database represents data base configuration
@@ -74,6 +76,8 @@ var def = Default{
 	"/etc/rmd/policy.toml",
 	false,
 	"/sys/fs/resctrl",
+	"", // by default do not load any external plugin (if not configured)
+	30,
 }
 
 var defaultConfigPath = []string{

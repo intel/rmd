@@ -109,7 +109,7 @@ func GetAvailableCacheSchemata(allres map[string]*resctrl.ResAssociation,
 		if util.HasElem(ignoreGroups, k) {
 			continue
 		}
-		if sv, ok := v.Schemata[cacheLevel]; ok {
+		if sv, ok := v.CacheSchemata[cacheLevel]; ok {
 			if len(schemata) <= 0 {
 				// skip rest of iteration execution
 				// (without data in schemata[] there will be failure below)

@@ -3,7 +3,7 @@
 ## Prepare GO development environment
 
 Follow https://golang.org/doc/install to install golang.
-Make sure you have your $GOPATH, $PATH setup correctly
+Make sure you have your \$GOPATH, \$PATH setup correctly
 
 *Note: only support build RMD on linux host(GOOS=Linux)*
 
@@ -15,33 +15,78 @@ export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 go env
 ```
 
-As RMD is prepared as "Go module", it needs at least Go 1.11 version to be build properly. However, it is highly recommended to use version not lower than 1.13 due to multiple bugs fixed in the standard library.
+RMD has been developed, build and tested using Go 1.13 and this version is a minimal required for RMD compilation. However, it is highly recommended to use newest available 1.x version (1.15 at the time of RMD v0.3 release) due to continuous bug fixing and improvements of the standard library.
 
 ## Get rmd
 
+RMD is published as open source project hosted on GitHub. Full source code can be downloaded using Go tools:
+
+
+```bash
+go get github.com/intel/rmd
 ```
-$ go get github.com/intel/rmd
+
+or with git command:
+
+```bash
+git clone https://github.com/intel/rmd
 ```
+
+It is also possible to download zipped sources from [RMD repository](https://github.com/intel/rmd) using GitHub web interface.
 
 ## Build & install rmd
 
-```
-# build rmd, only support linux host(GOOS=Linux)
-$ cd ${GOPATH}/src/github.com/intel/rmd
-$ make
-# You will find the rmd binary under ${GOPATH}/src/github.com/intel/rmd/build
+Since release *v0.2* RMD is developed as a Go module. It means it can be downloaded into and build inside any system directory - not only in *$GOPATH/src/\<server\>/\<repository\>/* as it was before Go 1.11.
 
-# install RMD
-$ sudo make install
-# This will install RMD into /usr/local/sbin/ along with some default
-configuration files under /etc/rmd
+RMD supports only Linux OS and cannot be built for other operating systems. When building RMD using other system (cross compilation) please set *GOOS* environment variable to *linux*.
+
+Assuming that RMD source code has been downloaded into *$HOME/sources/rmd*, build and installation process is as follow:
+
+```bash
+# Enter source directory
+cd $HOME/sources/rmd
+
+# Build RMD
+make
+# output binaries (rmd and gen_conf) can be found under $HOME/sources/rmd/build
+
+# Install RMD
+sudo make install
+
+# RMD will be installed into /usr/local/sbin/ 
+# Default configuration files will be placed under /etc/rmd
 ```
+
+RMD can be also build with Openstack integration support. To prepare *rmd* and *gen_conf* binaries with built-in Openstack code use additional make flag:
+
+```bash
+make BUILD_TYPE=openstack
+```
+
+Additional Openstack related sections in *rmd.toml* should be filled according to local Openstack environment configuration.
 
 ## Run rmd
 
+To launch RMD in normal mode run:
+
+```bash
+sudo /usr/local/sbin/rmd
+```
+
+For testing purposes RMD can be launched in *debug mode* using command line param:
+
+```bash
+sudo /usr/local/sbin/rmd --debug
+# or
+sudo /usr/local/sbin/rmd -d
+```
+
+Please note that this mode does not provide REST API security (access control, connection encryption) and should not be used in production environment.
+
+For more information about possible command line arguments please run:
+
 ```
 $ sudo /usr/local/sbin/rmd --help
-$ sudo /usr/local/sbin/rmd
 ```
 
 ## Commit code

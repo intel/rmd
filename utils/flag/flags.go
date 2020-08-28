@@ -53,6 +53,7 @@ func InitFlags() {
 	pflag.Int("debugport", 8081, "Debug listen port")
 	pflag.String("conf-dir", "", "Directory of config file")
 	pflag.String("clientauth", "challenge", "The policy the server will follow for TLS Client Authentication")
+	pflag.Bool("force-config", false, "Force settings from config file if different than current platform settings")
 
 	pflag.Parse()
 }

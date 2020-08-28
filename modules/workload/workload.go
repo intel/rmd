@@ -3,18 +3,26 @@ package workload
 // workload api objects to represent resources in RMD
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 
+	"github.com/intel/rmd/internal/plugins"
 	proxyclient "github.com/intel/rmd/internal/proxy/client"
 	"github.com/intel/rmd/modules/cache"
+	cacheconf "github.com/intel/rmd/modules/cache/config"
 	"github.com/intel/rmd/utils/cpu"
+	"github.com/intel/rmd/utils/pqos"
 	"github.com/intel/rmd/utils/resctrl"
 
 	libutil "github.com/intel/rmd/utils/bitmap"
@@ -23,15 +31,20 @@ import (
 	"github.com/intel/rmd/internal/db"
 	rmderror "github.com/intel/rmd/internal/error"
 	"github.com/intel/rmd/modules/policy"
-	"github.com/intel/rmd/modules/pstate"
 	wltypes "github.com/intel/rmd/modules/workload/types"
 	util "github.com/intel/rmd/utils"
+	appConf "github.com/intel/rmd/utils/config"
 )
 
 var l sync.Mutex
 
 // database for storing all active workloads
 var workloadDatabase db.DB
+
+// Flag to check if MBA and L3 CAT is supported
+var isMbaSupported, isL3CATSupported, isMbaMbpsAvailable bool
+
+var mbaMaxValue, mbaValue uint32
 
 // reusable function for filling workload with policy-based params
 func fillWorkloadByPolicy(wrkld *wltypes.RDTWorkLoad) error {
@@ -49,41 +62,53 @@ func fillWorkloadByPolicy(wrkld *wltypes.RDTWorkLoad) error {
 	}
 
 	// cache allocation is not mandatory so use param if they exists
-	maxWays, err := strconv.Atoi(policy["cache"]["max"])
-	if err == nil {
-		wrkld.Cache.Max = new(uint32)
-		*wrkld.Cache.Max = uint32(maxWays)
+	var errMax error
+	var errMin error
+
+	// check and copy cache data
+	maxCache, ok := policy["cache"]["max"].(int64)
+	if !ok {
+		errMax = fmt.Errorf("Failed to convert type for max cache")
 	}
 
-	minWays, err := strconv.Atoi(policy["cache"]["min"])
-	if err == nil {
-		wrkld.Cache.Min = new(uint32)
-		*wrkld.Cache.Min = uint32(minWays)
+	minCache, ok := policy["cache"]["min"].(int64)
+	if !ok {
+		errMin = fmt.Errorf("Failed to convert type for min cache")
 	}
 
-	if (wrkld.Cache.Min != nil && wrkld.Cache.Max == nil) || (wrkld.Cache.Min == nil && wrkld.Cache.Max != nil) {
+	if errMax == nil && errMin == nil {
+		wrkld.Rdt.Cache.Max = new(uint32)
+		*wrkld.Rdt.Cache.Max = uint32(maxCache)
+		wrkld.Rdt.Cache.Min = new(uint32)
+		*wrkld.Rdt.Cache.Min = uint32(minCache)
+	}
+
+	if (wrkld.Rdt.Cache.Max != nil && wrkld.Rdt.Cache.Min == nil) || (wrkld.Rdt.Cache.Max == nil && wrkld.Rdt.Cache.Min != nil) {
 		return fmt.Errorf("Invalid policy - exactly one *Cache param defined")
 	}
 
-	// check if Power/P-State module is enabled
-	if pstate.Instance != nil {
-		log.Debugf("Get pstate params for %s policy and fill workload", wrkld.Policy)
-		if ratioString, ok := policy["pstate"]["ratio"]; ok {
-			// convert string to float64
-			ratio, err := strconv.ParseFloat(ratioString, 64)
-			if err != nil {
-				return rmderror.NewAppError(http.StatusInternalServerError,
-					"Broken policy for P-State. %v", err)
-			}
-			wrkld.PState.Ratio = new(float64)
-			*wrkld.PState.Ratio = ratio
-			wrkld.PState.Monitoring = new(string)
-			*wrkld.PState.Monitoring = "on"
-		} else {
-			return fmt.Errorf("Error while getting Ratio from P-State policy. %v", err)
-		}
-
+	// check and copy MBA data
+	valMba, ok := policy["mba"]["percentage"].(int)
+	if ok {
+		wrkld.Rdt.Mba.Percentage = new(uint32)
+		*wrkld.Rdt.Mba.Percentage = uint32(valMba)
 	}
+
+	// get data from policy and fill plugins' params
+	for mod, data := range policy {
+		log.Debugf("Params for module %v found in policy", mod)
+		// "cache" and "mba" are currently internal part of workload - not plugins
+		if mod == "cache" || mod == "mba" {
+			continue
+		}
+		// check and create Plugins only if there's a need to put something inside
+		if wrkld.Plugins == nil {
+			wrkld.Plugins = make(map[string]map[string]interface{})
+		}
+		// copy plugin params into workload
+		wrkld.Plugins[mod] = data
+	}
+
 	return nil
 }
 
@@ -102,38 +127,96 @@ func validate(w *wltypes.RDTWorkLoad) error {
 	}
 
 	if w.Policy == "" {
+		// MBA part
 		// there have to be both cache values or none of them
-		if (w.Cache.Max == nil && w.Cache.Min != nil) || (w.Cache.Max != nil && w.Cache.Min == nil) {
-			return fmt.Errorf("Need to provide both *_cache or none of them")
+		if (w.Rdt.Cache.Max == nil && w.Rdt.Cache.Min != nil) || (w.Rdt.Cache.Max != nil && w.Rdt.Cache.Min == nil) {
+			return fmt.Errorf("Need to provide both cache.* or none of them")
 		}
-		if w.PState.Ratio != nil || w.PState.Monitoring != nil {
-			// when P-State related setting forced check if P-State plugin enabled
-			if pstate.Instance == nil {
-				return fmt.Errorf("P-State configuration given while plugin not enabled")
+		// If MBA values are provided :
+		// 1. Check if its a Cache guaranteed request
+		// 2. Check if MBA value is range of 1 to max
+		// 3. If any of the above fails then return error
+		if isMbaSupported {
+			if isMbaMbpsAvailable {
+				if w.Rdt.Mba.Percentage != nil {
+					return fmt.Errorf("Please provide MBA in Mbps")
+				}
+				if w.Rdt.Mba.Mbps != nil {
+					mbaValue = *w.Rdt.Mba.Mbps
+				}
+			} else {
+				if w.Rdt.Mba.Mbps != nil {
+					return fmt.Errorf("Please provide MBA in Percentage")
+				}
+				if w.Rdt.Mba.Percentage != nil {
+					mbaValue = *w.Rdt.Mba.Percentage
+				}
 			}
 		}
-		if w.PState.Ratio != nil && *w.PState.Ratio <= 0.0 {
-			return fmt.Errorf("Invalid P-State Branch Ratio given")
+
+		if w.Rdt.Mba.Mbps != nil || w.Rdt.Mba.Percentage != nil {
+			if w.Rdt.Cache.Max != nil && w.Rdt.Cache.Min != nil &&
+				((*w.Rdt.Cache.Max != *w.Rdt.Cache.Min && mbaValue != mbaMaxValue) ||
+					(*w.Rdt.Cache.Min == 0 && *w.Rdt.Cache.Max == 0 && mbaValue != mbaMaxValue)) {
+				return fmt.Errorf("MBA only supported for Guaranteed Request and not for BestEffort and Shared")
+			}
+			if mbaValue > mbaMaxValue || mbaValue <= 0 {
+				return fmt.Errorf("MBA values in should range from 1 to %d", mbaMaxValue)
+			}
 		}
-		if w.PState.Ratio != nil && w.PState.Monitoring == nil {
-			// when Branch Ratio given then implicitly enable monitoring
-			w.PState.Monitoring = new(string)
-			*w.PState.Monitoring = "on"
+
+		if isL3CATSupported && isMbaSupported {
+			if w.Rdt.Cache.Max == nil && w.Rdt.Cache.Min == nil && (w.Rdt.Mba.Percentage != nil || w.Rdt.Mba.Mbps != nil) {
+				return fmt.Errorf("Need to provide both cache and mba for better performance")
+			}
+		} else {
+			if isL3CATSupported {
+				if w.Rdt.Mba.Percentage != nil || w.Rdt.Mba.Mbps != nil {
+					return fmt.Errorf("This machine supports only cache and not MBA")
+				}
+			} else {
+				if w.Rdt.Cache.Max != nil && w.Rdt.Cache.Min != nil {
+					return fmt.Errorf("This machine supports only MBA and not cache")
+				}
+			}
 		}
-		if w.PState.Monitoring != nil {
-			switch *w.PState.Monitoring {
-			case "on":
-				fallthrough
-			case "off":
-				break
-			case "ON":
-				*w.PState.Monitoring = "on"
-				break
-			case "OFF":
-				*w.PState.Monitoring = "off"
-				break
-			default:
-				return fmt.Errorf("Invalid P-State Monitoring value")
+
+		// Plugins part
+		// call Validate() for each loaded module defined in this workload
+		for module, params := range w.Plugins {
+			log.Debugf("Validating params for %v module", module) // temporary log
+
+			// if params changed fetch module (if exists)
+			pluginIface, ok := plugins.Interfaces[module]
+			if !ok {
+				// module not loaded but requested
+				return rmderror.NewAppError(http.StatusBadRequest, "Trying to use module that is not loaded")
+			}
+			if pluginIface == nil {
+				// module seems to be loaded but interface is nil
+				return rmderror.NewAppError(http.StatusInternalServerError, "Error when processing loaded modules")
+			}
+			// unify param types coming from JSON
+			paramsMap, err := util.UnifyMapParamsTypes(params)
+			if err != nil {
+				return err
+			}
+			// add core ids and process ids to params
+			valInts, err := prepareCoreIDs(w.CoreIDs)
+			if err != nil {
+				return rmderror.NewAppError(http.StatusBadRequest, "Invalid params (core ids) received")
+			}
+			paramsMap["CPUS"] = valInts
+			valInts, err = prepareCoreIDs(w.TaskIDs)
+			if err != nil {
+				return rmderror.NewAppError(http.StatusBadRequest, "Invalid params (task ids) received")
+			}
+			paramsMap["TASKS"] = valInts
+
+			// and validate params
+			err = pluginIface.Validate(paramsMap)
+			if err != nil {
+				return rmderror.NewAppError(http.StatusBadRequest, "Invalid params received", err)
 			}
 		}
 	} else {
@@ -146,27 +229,36 @@ func validate(w *wltypes.RDTWorkLoad) error {
 
 	// at least one of following params must be provided:
 	// - policy (checked above)
-	// - Cache.Max && Cache.min
-	// - PState.Ratio || PState.Monitoring
-	if w.Cache.Max != nil && w.Cache.Min != nil {
+	// - RDT.Cache or RDT.Mba
+	// - other loadable plugins params
+
+	if w.Rdt.Cache.Max != nil && w.Rdt.Cache.Min != nil {
 		// Cache params defined
 		return nil
 	}
-	if w.PState.Ratio != nil || w.PState.Monitoring != nil {
-		// P-State params defined
+
+	if w.Rdt.Mba.Percentage != nil {
+		// MBA params defined
+		return nil
+	}
+
+	if len(w.Plugins) > 0 {
+		// params exists and are validated above - so workload should be fine
 		return nil
 	}
 
 	// if reached this point then something went wrong
-	return fmt.Errorf("No Cache neither PState params in workload")
+	return fmt.Errorf("No RDT/Plugins params in workload")
 }
 
-func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
+func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *wltypes.RDTEnforce) error {
+	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
 
-	resaall := proxyclient.GetResAssociation()
+	// log.Println("Resall : ", resaall)
 
 	targetLev := strconv.FormatUint(uint64(cache.GetLLC()), 10)
-	av, err := cache.GetAvailableCacheSchemata(resaall, []string{"infra", "."}, er.Type, "L"+targetLev)
+	av, err := cache.GetAvailableCacheSchemata(resaall, []string{pqos.InfraGoupCOS, pqos.OSGroupCOS}, er.Type, "L"+targetLev)
+
 	if err != nil {
 		return rmderror.AppErrorf(http.StatusInternalServerError,
 			"Unable to read cache schemata; %s", err.Error())
@@ -178,8 +270,8 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
 
 	// cache alocation settings begin (only if enabled in workload request)
 	for k, v := range av {
-		cacheID, _ := strconv.Atoi(k)
-		if !inCacheList(uint32(cacheID), er.CacheIDs) && er.Type != cache.Shared {
+		socketID, _ := strconv.Atoi(k)
+		if !inCacheList(uint32(socketID), er.SocketIDs) && er.Type != cache.Shared {
 			candidate[k], _ = libutil.NewBitmap(
 				cache.GetCosInfo().CbmMaskLen,
 				cache.GetCosInfo().CbmMask)
@@ -190,6 +282,7 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
 			// TODO
 			// candidate[k] = v.GetBestMatchConnectiveBits(er.MaxWays, 0, true)
 			candidate[k] = v.GetConnectiveBits(er.MaxWays, 0, false)
+			// log.Printf("getbits",candidate[k])
 		case cache.Besteffort:
 			// Always to try to allocate max cache ways, if fail try to
 			// get the most available ones
@@ -211,12 +304,12 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
 						"Not enough cache left on cache_id %s", k)
 				}
 				// Try to Shrink workload in besteffort pool
-				cand, changed, err := shrinkBEPool(resaall, reserved[cache.Besteffort].Schemata[k], cacheID, er.MinWays)
+				cand, changed, err := shrinkBEPool(resaall, reserved[cache.Besteffort].Schemata[k], socketID, er.MinWays)
 				if err != nil {
 					return rmderror.AppErrorf(http.StatusInternalServerError,
 						"Errors while try to shrink cache ways on cache_id %s", k)
 				}
-				log.Printf("Shriking cache ways in besteffort pool, candidate schemata for cache id  %d is %s", cacheID, cand.ToString())
+				log.Printf("Shriking cache ways in besteffort pool, candidate schemata for cache id  %d is %s", socketID, cand.ToString())
 				candidate[k] = cand
 				// Merge changed association to a map, we will commit this map
 				// later
@@ -241,26 +334,111 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
 				"Not enough cache left on cache_id %s", k)
 		}
 	}
+	// populating cache params in rdtenforce structure with necessar values
+	rdtenforce.Resall = resaall
+	rdtenforce.TargetLev = targetLev
+	rdtenforce.CandidateCache = candidate
+	rdtenforce.ChangedRes = changedRes
+	rdtenforce.Reserved = reserved
+	rdtenforce.AvailableSchemata = av
 
-	var resAss *resctrl.ResAssociation
-	var grpName string
+	return nil
+}
 
-	if er.Type == cache.Shared {
-		grpName = reserved[cache.Shared].Name
-		if res, ok := resaall[grpName]; !ok {
-			resAss = newResAss(candidate, targetLev)
-		} else {
-			resAss = res
-		}
+// This function populates the rdtenforce structure with necessary MBA params
+func enforceMba(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *wltypes.RDTEnforce) error {
+	var availableSchemata map[string]*libutil.Bitmap
+	var err error
+	// If cache params are received as part of the request reuse the calculation in rdtenforce
+	// If not then calculate
+	if er.UseCache {
+		availableSchemata = rdtenforce.AvailableSchemata
 	} else {
-		resAss = newResAss(candidate, targetLev)
-		if len(w.TaskIDs) > 0 {
-			grpName = strings.Join(w.TaskIDs, "_") + "-" + er.Type
-		} else if len(w.CoreIDs) > 0 {
-			grpName = strings.Join(w.CoreIDs, "_") + "-" + er.Type
+		resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
+		targetLev := strconv.FormatUint(uint64(cache.GetLLC()), 10)
+		availableSchemata, err = cache.GetAvailableCacheSchemata(resaall, []string{pqos.InfraGoupCOS, pqos.OSGroupCOS}, "none", "L"+targetLev)
+		if err != nil {
+			return rmderror.AppErrorf(http.StatusInternalServerError,
+				"Unable to read cache schemata; %s", err.Error())
 		}
 	}
-	// cache alocation settings end
+	rdtenforce.CandidateMba = make(map[string]*uint32, len(availableSchemata))
+	rdtenforce.TargetMba = "MB"
+	defaultMBAValue := mbaMaxValue
+	for k := range availableSchemata {
+		socketID, ok := strconv.Atoi(k)
+		if ok != nil {
+			return ok
+		}
+		// Check the socket to which the MBA params need to be modified
+		if inCacheList(uint32(socketID), er.SocketIDs) {
+			rdtenforce.CandidateMba[k] = &mbaValue
+		} else {
+			rdtenforce.CandidateMba[k] = &defaultMBAValue
+		}
+	}
+	return nil
+}
+
+func enforceRDT(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest, rdtenforce *wltypes.RDTEnforce) error {
+	var resAss *resctrl.ResAssociation
+	var grpName string
+	var err error
+	// Read all the rdtenforce cache and MBA params
+	targetLev := rdtenforce.TargetLev
+	targetMba := rdtenforce.TargetMba
+	resaall := rdtenforce.Resall
+	candidateCache := rdtenforce.CandidateCache
+	candidateMba := rdtenforce.CandidateMba
+	changedRes := rdtenforce.ChangedRes
+
+	shouldReturnCLOS := false
+	if er.Type == cache.Shared {
+		grpName, err = pqos.GetSharedCLOS()
+	} else {
+		grpName, err = pqos.UseAvailableCLOS()
+		shouldReturnCLOS = true
+	}
+
+	if err != nil {
+		log.Debugf("Failed to reserve CLOS: %v", err.Error())
+		return err
+	}
+
+	// Check if COS should be returned to available pool when exiting this function.
+	// Number of CLOSes is strictly limited so it's better to not waste it on non-RDT workloads
+	// Skip removal if it's shared group
+	defer func() {
+		if shouldReturnCLOS {
+			log.Warn("Releasing unused COS due to error")
+			pqos.ReturnClos(w.CosName)
+			w.CosName = ""
+		} else {
+			log.Debug("Exiting Enforce with success")
+		}
+	}()
+
+	// If cache is used
+	if er.UseCache {
+		if er.Type == cache.Shared {
+			if res, ok := resaall[grpName]; !ok {
+				resAss = newResAss(candidateCache, targetLev)
+			} else {
+				resAss = res
+			}
+		} else {
+			resAss = newResAss(candidateCache, targetLev)
+		}
+	}
+	// If Mba is used
+	if er.UseMba {
+		// shared cache group is not allowed when MBA in use
+		if er.Type == cache.Shared {
+			return errors.New("MBA forbidden for shared group")
+		}
+		resAss = newResAssForMba(resAss, candidateMba, targetMba)
+	}
+	// cache allocation settings end
 
 	if len(w.CoreIDs) >= 0 {
 		bm, _ := cache.BitmapsCPUWrapper(w.CoreIDs)
@@ -273,7 +451,6 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
 		}
 	}
 	resAss.Tasks = append(resAss.Tasks, w.TaskIDs...)
-
 	if err = proxyclient.Commit(resAss, grpName); err != nil {
 		log.Errorf("Error while try to commit resource group for workload %s, group name %s", w.ID, grpName)
 		return rmderror.NewAppError(http.StatusInternalServerError,
@@ -282,7 +459,7 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
 
 	// loop to change shrunk resource
 	// TODO: there's corners if there are multiple changed resource groups,
-	// but we failed to commit one of them (worest case is the last group),
+	// but we failed to commit one of them (worst case is the last group),
 	// there's no rollback.
 	// possible fix is to adding this into a task flow
 	for name, res := range changedRes {
@@ -304,6 +481,8 @@ func enforceCache(w *wltypes.RDTWorkLoad, er *wltypes.EnforceRequest) error {
 	}
 
 	log.Debug("Setting cos_name to: ", grpName)
+	// no errors till now - remove CLOS returning (releasing) flag
+	shouldReturnCLOS = false
 	w.CosName = grpName
 	return nil
 }
@@ -316,45 +495,54 @@ func Enforce(w *wltypes.RDTWorkLoad) error {
 	defer l.Unlock()
 
 	er := &wltypes.EnforceRequest{}
+	rdtenforce := &wltypes.RDTEnforce{}
 	if err := populateEnforceRequest(er, w); err != nil {
 		return err
 	}
-
+	// Use cache when params received as part of request
 	if er.UseCache {
-		if err := enforceCache(w, er); err != nil {
+		if err := enforceCache(w, er, rdtenforce); err != nil {
+			return err
+		}
+	}
+	// Use Mba when params received as part of request
+	if er.UseMba {
+		if err := enforceMba(w, er, rdtenforce); err != nil {
+			return err
+		}
+	}
+	// Enforce the Cache and MBA params into the resctrl
+	if er.UseMba || er.UseCache {
+		if err := enforceRDT(w, er, rdtenforce); err != nil {
 			return err
 		}
 	}
 
-	// p-state settings begin
-	if pstate.Instance != nil {
-		// if P-State used in this Workload then enforce it
-		if w.PState.Ratio != nil || w.PState.Monitoring != nil {
-			log.Debugf("Enforcing P-State enebled Workload")
-			// at this point we don't know exact size due to possibility of "3-8" syntax usage
-			// coreids is []int type
-			coreids, err := prepareCoreIDs(w.CoreIDs)
-			if err != nil {
-				log.Errorf("Failed to prepare core IDs list for enforce")
-				return err
-			}
-
-			// prepare generic params for module
-			params := make(map[string]interface{})
-			if w.PState.Monitoring != nil {
-				params["ratio"] = *w.PState.Ratio
-			}
-			if w.PState.Monitoring != nil {
-				params["monitoring"] = *w.PState.Monitoring
-			}
-
-			err = pstate.Instance.Enforce(coreids, []int{}, params)
-			if err != nil {
-				log.Warningf("Could not patch pstate config: %s", err)
-			}
+	for module, params := range w.Plugins {
+		log.Debugf("Sending enforce request to %v module with %v params", module, params)
+		paramsMap, err := util.UnifyMapParamsTypes(params)
+		if err != nil {
+			return err
 		}
+
+		// params already validated in previous step so no error expected here
+		valInts, _ := prepareCoreIDs(w.CoreIDs)
+		paramsMap["CPUS"] = valInts
+		valInts, _ = prepareCoreIDs(w.TaskIDs)
+		paramsMap["TASKS"] = valInts
+
+		result, err := proxyclient.Enforce(module, paramsMap)
+		if err != nil {
+			return err
+		}
+
+		// initialize before use if Plugins map doesn't exist
+		if w.BackendPluginInfo == nil {
+			w.BackendPluginInfo = make(map[string]string)
+		}
+
+		w.BackendPluginInfo[module] = result
 	}
-	// p-state settings end
 
 	w.Status = wltypes.Successful
 	return nil
@@ -365,53 +553,42 @@ func Release(w *wltypes.RDTWorkLoad) error {
 	l.Lock()
 	defer l.Unlock()
 
-	resaall := proxyclient.GetResAssociation()
+	for module, params := range w.Plugins {
+		log.Debugf("Sending release request to %v module with %v params", module, params) // temporary log
 
-	r, ok := resaall[w.CosName]
+		paramsMap, err := util.UnifyMapParamsTypes(params)
+		if err != nil {
+			return err
+		}
 
-	if !ok {
-		log.Warningf("Could not find COS %s.", w.CosName)
+		if w.BackendPluginInfo != nil {
+			paramsMap["ENFORCEID"] = w.BackendPluginInfo[module]
+		}
+
+		// add core ids and process ids to params
+		valInts, err := prepareCoreIDs(w.CoreIDs)
+		if err != nil {
+			return errors.New("Invalid params (core ids) received")
+		}
+		paramsMap["CPUS"] = valInts
+		valInts, err = prepareCoreIDs(w.TaskIDs)
+		if err != nil {
+			return errors.New("Invalid params (task ids) received")
+		}
+		paramsMap["TASKS"] = valInts
+
+		err = proxyclient.Release(module, paramsMap)
+		if err != nil {
+			return err
+		}
+	}
+
+	// CosName is used only for RDT based workloads so now check it en exit if not found
+	if w.CosName == "" {
 		return nil
 	}
 
-	r.Tasks = util.SubtractStringSlice(r.Tasks, w.TaskIDs)
-	cpubm, _ := cache.BitmapsCPUWrapper(r.CPUs)
-
-	if len(w.CoreIDs) > 0 {
-		wcpubm, _ := cache.BitmapsCPUWrapper(w.CoreIDs)
-		cpubm = cpubm.Axor(wcpubm)
-	}
-
-	// check if P-State related params should be verified
-	if pstate.Instance != nil {
-		// if P-State used in this Workload then remove it
-		if w.PState.Ratio != nil || w.PState.Monitoring != nil {
-			log.Debugf("Releasing P-State enebled Workload")
-			// convert core ids in []string into coreids in []int
-
-			// coreids is []int type
-			coreids, err := prepareCoreIDs(w.CoreIDs)
-			if err != nil {
-				log.Errorf("Failed to prepare core IDs list for release")
-				return err
-			}
-
-			err = pstate.Instance.Release(coreids, []int{}, map[string]interface{}{})
-			if err != nil {
-				log.Warningf("Could not release pstate config(s): %s", err)
-			}
-		}
-	}
-
-	// safely remove resource group if no tasks and cpu bit map is empty
-	if len(r.Tasks) < 1 && cpubm.IsEmpty() {
-		log.Printf("Remove resource group: %s", w.CosName)
-		if err := proxyclient.DestroyResAssociation(w.CosName); err != nil {
-			return err
-		}
-		return cache.SetOSGroup()
-	}
-	// remove workload task ids from resource group
+	// remove workload tasks from resource group
 	if len(w.TaskIDs) > 0 {
 		if err := proxyclient.RemoveTasks(w.TaskIDs); err != nil {
 			log.Printf("Ignore Error while remove tasks %s", err)
@@ -419,16 +596,56 @@ func Release(w *wltypes.RDTWorkLoad) error {
 		}
 	}
 
+	// remove workload cores from resource group
 	if len(w.CoreIDs) > 0 {
-		r.CPUs = cpubm.ToString()
-		return proxyclient.Commit(r, w.CosName)
+		if err := proxyclient.RemoveCores(w.CoreIDs); err != nil {
+			log.Printf("Ignore Error while remove tasks %s", err)
+			return nil
+		}
 	}
-	return nil
+
+	// Additional check needed to properly handle CLOS name for shared group
+	if pqos.IsSharedCLOS(w.CosName) {
+		// TODO consider simplification in future
+		// (it is needed to check if any other shared workload left, maybe some internal structure will be OK)
+		resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
+		r, ok := resaall[w.CosName]
+		if !ok {
+			log.Warningf("Something is wrong with shared CLOS %s - removing from used list", w.CosName)
+			pqos.ReturnClos(w.CosName)
+			return nil
+		}
+
+		r.Tasks = util.SubtractStringSlice(r.Tasks, w.TaskIDs)
+		cpubm, _ := cache.BitmapsCPUWrapper(r.CPUs)
+
+		if len(w.CoreIDs) > 0 {
+			wcpubm, _ := cache.BitmapsCPUWrapper(w.CoreIDs)
+			cpubm = cpubm.Axor(wcpubm)
+		}
+
+		// if shared CLOS still not empty then return without releasing CLOS
+		if len(r.Tasks) > 0 || !cpubm.IsEmpty() {
+			log.Printf("Shared CLOS %s not empty", w.CosName)
+			return cache.SetOSGroup()
+		}
+	}
+
+	// set CLOS cache/MBA to default values
+	if err := proxyclient.ResetCOSParamsToDefaults(w.CosName); err != nil {
+		log.Errorf("%v", err)
+		return nil
+	}
+
+	// return CLOSes pool (as it's non shared or shared empty)
+	pqos.ReturnClos(w.CosName)
+
+	// at the end update OS group (that is COS0 / "." in resctrl FS) accordingly
+	return cache.SetOSGroup()
 }
 
 // Update a workload
 func update(w, patched *wltypes.RDTWorkLoad) error {
-
 	// if we change policy/max_cache/min_cache, release current resource group
 	// and re-enforce it.
 	reEnforce := false
@@ -443,57 +660,133 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 		if len(w.Policy) > 0 {
 			fillWorkloadByPolicy(w)
 		}
-		if patched.Cache.Max != nil {
+
+		if patched.Rdt.Cache.Max != nil {
 			// param manually defined - drop policy information
 			w.Policy = ""
-			if w.Cache.Max == nil {
-				w.Cache.Max = patched.Cache.Max
+			if w.Rdt.Cache.Max == nil {
+				w.Rdt.Cache.Max = patched.Rdt.Cache.Max
 				reEnforce = true
 			}
-			if w.Cache.Max != nil && *w.Cache.Max != *patched.Cache.Max {
-				*w.Cache.Max = *patched.Cache.Max
+			if w.Rdt.Cache.Max != nil && *w.Rdt.Cache.Max != *patched.Rdt.Cache.Max {
+				*w.Rdt.Cache.Max = *patched.Rdt.Cache.Max
 				reEnforce = true
 			}
 		}
 
-		if patched.Cache.Min != nil {
+		if patched.Rdt.Cache.Min != nil {
 			// param manually defined - drop policy information
 			w.Policy = ""
-			if w.Cache.Min == nil {
-				w.Cache.Min = patched.Cache.Min
+			if w.Rdt.Cache.Min == nil {
+				w.Rdt.Cache.Min = patched.Rdt.Cache.Min
 				reEnforce = true
 			}
-			if w.Cache.Min != nil && *w.Cache.Min != *patched.Cache.Min {
-				*w.Cache.Min = *patched.Cache.Min
+			if w.Rdt.Cache.Min != nil && *w.Rdt.Cache.Min != *patched.Rdt.Cache.Min {
+				*w.Rdt.Cache.Min = *patched.Rdt.Cache.Min
 				reEnforce = true
 			}
 		}
 
-		if patched.PState.Ratio != nil {
-			// param manually defined - drop policy information
-			w.Policy = ""
-			if w.PState.Ratio == nil {
-				w.PState.Ratio = new(float64)
-			}
-			if *w.PState.Ratio != *patched.PState.Ratio {
-				*w.PState.Ratio = *patched.PState.Ratio
-				reEnforce = true
+		if isMbaSupported {
+			if isMbaMbpsAvailable {
+				if patched.Rdt.Mba.Percentage != nil {
+					return rmderror.NewAppError(http.StatusBadRequest, "Please provide MBA in Mbps")
+				}
+			} else {
+				if patched.Rdt.Mba.Mbps != nil {
+					return rmderror.NewAppError(http.StatusBadRequest, "Please provide MBA in Percentage")
+				}
 			}
 		}
 
-		if patched.PState.Monitoring != nil {
-			// param manually defined - drop policy information
-			w.Policy = ""
-			if w.PState.Monitoring == nil {
-				w.PState.Monitoring = new(string)
+		if patched.Rdt.Mba.Percentage != nil {
+			if *patched.Rdt.Mba.Percentage > 0 && *patched.Rdt.Mba.Percentage <= cache.MaxMBAPercentage {
+				w.Policy = ""
+				if w.Rdt.Mba.Percentage == nil {
+					w.Rdt.Mba.Percentage = patched.Rdt.Mba.Percentage
+					mbaValue = *patched.Rdt.Mba.Percentage
+					reEnforce = true
+				}
+				if w.Rdt.Mba.Percentage != nil && *w.Rdt.Mba.Percentage != *patched.Rdt.Mba.Percentage {
+					*w.Rdt.Mba.Percentage = *patched.Rdt.Mba.Percentage
+					mbaValue = *patched.Rdt.Mba.Percentage
+					reEnforce = true
+				}
+			} else {
+				return rmderror.NewAppError(http.StatusBadRequest, "MBA values range only from 1 to 100")
 			}
-			if *w.PState.Monitoring != *patched.PState.Monitoring {
-				*w.PState.Monitoring = *patched.PState.Monitoring
-				reEnforce = true
+		}
+
+		if patched.Rdt.Mba.Mbps != nil {
+			if *patched.Rdt.Mba.Mbps > 0 && *patched.Rdt.Mba.Mbps <= cache.MaxMBAMbps {
+				w.Policy = ""
+				if w.Rdt.Mba.Mbps == nil {
+					w.Rdt.Mba.Mbps = patched.Rdt.Mba.Mbps
+					mbaValue = *patched.Rdt.Mba.Mbps
+					reEnforce = true
+				}
+				if w.Rdt.Mba.Mbps != nil && *w.Rdt.Mba.Mbps != *patched.Rdt.Mba.Mbps {
+					*w.Rdt.Mba.Mbps = *patched.Rdt.Mba.Mbps
+					mbaValue = *patched.Rdt.Mba.Mbps
+					reEnforce = true
+				}
+			} else {
+				return rmderror.NewAppError(http.StatusBadRequest, "MBA values range only from 1 to 4294967290")
+			}
+		}
+
+		for module, params := range patched.Plugins {
+			log.Debugf("Validating params for %v module", module) // temporary log
+			if module == "cache" {
+				// temporary cache is built-in module so ignore it here
+				continue
+			}
+
+			// first check if params for module changed
+			if reflect.DeepEqual(w.Plugins[module], params) {
+				// both maps (sets of params) have same contents so skip this iteration
+				continue
+			}
+
+			paramsMap, err := util.UnifyMapParamsTypes(params)
+			if err != nil {
+				return err
+
+			}
+
+			// add core ids and process ids to params
+			valInts, err := prepareCoreIDs(w.CoreIDs)
+			if err != nil {
+				return errors.New("Invalid params (core ids) received")
+			}
+			paramsMap["CPUS"] = valInts
+
+			valInts, err = prepareCoreIDs(w.TaskIDs)
+			if err != nil {
+				return errors.New("Invalid params (task ids) received")
+			}
+			paramsMap["TASKS"] = valInts
+
+			// if params changed fetch module (if exists)
+			reEnforce = true
+			pluginIface, ok := plugins.Interfaces[module]
+			if !ok {
+				// module not loaded but requested
+				return rmderror.NewAppError(http.StatusBadRequest, "Trying to use module that is not loaded")
+			}
+			if pluginIface == nil {
+				// module seems to be loaded but interface is nil
+				return rmderror.NewAppError(http.StatusInternalServerError, "Error when processing loaded modules")
+			}
+
+			// and validate params
+			err = pluginIface.Validate(paramsMap)
+			if err != nil {
+				return rmderror.NewAppError(http.StatusBadRequest, "Invalid params received", err)
 			}
 		}
 	} else {
-		// policy defined (so shoul be taken as it's the priority param)
+		// policy defined (so should be taken as it's the priority param)
 		if patched.Policy != w.Policy {
 			// only if policy changed there's a need to update/reenforce workload
 			w.Policy = patched.Policy
@@ -504,7 +797,7 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 
 	if reEnforce == true {
 		if err := Release(w); err != nil {
-			return rmderror.NewAppError(http.StatusInternalServerError, "Faild to release workload",
+			return rmderror.NewAppError(http.StatusInternalServerError, "Failed to release workload",
 				fmt.Errorf(""))
 		}
 
@@ -514,12 +807,15 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 		if len(patched.CoreIDs) > 0 {
 			w.CoreIDs = patched.CoreIDs
 		}
+
+		w.Plugins = patched.Plugins
+
 		return Enforce(w)
 	}
 
 	l.Lock()
 	defer l.Unlock()
-	resaall := proxyclient.GetResAssociation()
+	resaall := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
 
 	if !reflect.DeepEqual(patched.CoreIDs, w.CoreIDs) ||
 		!reflect.DeepEqual(patched.TaskIDs, w.TaskIDs) {
@@ -543,7 +839,7 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 			bm, err := cache.BitmapsCPUWrapper(patched.CoreIDs)
 			if err != nil {
 				return rmderror.NewAppError(http.StatusBadRequest,
-					"Failed to Pareser workload coreIDs.", err)
+					"Failed to parse workload coreIDs.", err)
 			}
 			// TODO: check if this new CoreIDs overwrite other resource group
 			targetResAss.CPUs = bm.ToString()
@@ -559,8 +855,8 @@ func update(w, patched *wltypes.RDTWorkLoad) error {
 	return nil
 }
 
-func getCacheIDs(taskids []string, cpubitmap string, cacheinfos *cache.Infos, cpunum int) []uint32 {
-	var CacheIDs []uint32
+func getSocketIDs(taskids []string, cpubitmap string, cacheinfos *cache.Infos, cpunum int) []uint32 {
+	var SocketIDs []uint32
 	cpubm, _ := libutil.NewBitmap(cpunum, cpubitmap)
 
 	for _, t := range taskids {
@@ -578,24 +874,24 @@ func getCacheIDs(taskids []string, cpubitmap string, cacheinfos *cache.Infos, cp
 		// Okay, NewBitmap only support string list if we using human style
 		bm, _ := libutil.NewBitmap(cpunum, strings.Split(c.ShareCPUList, "\n"))
 		if !cpubm.And(bm).IsEmpty() {
-			CacheIDs = append(CacheIDs, c.ID)
+			SocketIDs = append(SocketIDs, c.ID)
 		}
 	}
-	return CacheIDs
+	return SocketIDs
 }
 
-func inCacheList(cache uint32, cacheList []uint32) bool {
+func inCacheList(socket uint32, socketList []uint32) bool {
 	// TODO: if this case, workload has taskids.
 	// Later we need to have abilitity to discover if has taskset
 	// to pin this taskids on a cpuset or not, for now we allocate
 	// cache on all cache.
 	// FIXME: this shouldn't happen here actually
-	if len(cacheList) == 0 {
+	if len(socketList) == 0 {
 		return true
 	}
 
-	for _, c := range cacheList {
-		if cache == c {
+	for _, c := range socketList {
+		if socket == c {
 			return true
 		}
 	}
@@ -603,7 +899,6 @@ func inCacheList(cache uint32, cacheList []uint32) bool {
 }
 
 func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad) error {
-
 	w.Status = wltypes.None
 	cpubitstr := ""
 	if len(w.CoreIDs) >= 0 {
@@ -624,33 +919,46 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 			"Unable to get Total CPU numbers on Host")
 	}
 
-	req.CacheIDs = getCacheIDs(w.TaskIDs, cpubitstr, cacheinfo, cpunum)
+	req.SocketIDs = getSocketIDs(w.TaskIDs, cpubitstr, cacheinfo, cpunum)
 
 	// if policy not defined in workload then use values from manually defined params
 	// (assuming RDTWorkLoad object has been validated before and only some safe-checks needed)
 	if len(w.Policy) == 0 {
-		if w.Cache.Min != nil {
-			req.MinWays = *w.Cache.Min
+		if w.Rdt.Cache.Min != nil {
+			req.MinWays = *w.Rdt.Cache.Min
 		}
-		if w.Cache.Max != nil {
-			req.MaxWays = *w.Cache.Max
+		if w.Rdt.Cache.Max != nil {
+			req.MaxWays = *w.Rdt.Cache.Max
 		}
-		if w.Cache.Min != nil && w.Cache.Max != nil {
+		if w.Rdt.Cache.Min != nil && w.Rdt.Cache.Max != nil {
 			req.UseCache = true
 		}
-		if w.PState.Ratio != nil {
-			req.PState = true
-			req.PStateBR = *w.PState.Ratio
-		}
-		if w.PState.Monitoring != nil {
-			// copy monitoring setting to request
-			if *w.PState.Monitoring == "on" {
-				req.PStateMonitoring = true
-			} else {
-				req.PStateMonitoring = false
+		// Check if MBA is available and enabled in the host
+		// MBA to be used only for Guaranteed Cache Request
+		if w.Rdt.Mba.Percentage != nil || w.Rdt.Mba.Mbps != nil {
+			if !isMbaSupported {
+				req.UseMba = false
+				log.Error("Mba is not supported in this machine")
+				return rmderror.NewAppError(http.StatusInternalServerError,
+					"MBA is not supported in this machine")
 			}
-			// mark that PState settings used in this request
-			req.PState = true
+			if flag, _ := proc.IsEnableMba(); !flag {
+				req.UseMba = false
+				log.Error("Mba is not enabled. Enable Mba")
+				return rmderror.NewAppError(http.StatusInternalServerError,
+					"Please enable MBA in resctrl fs")
+			}
+			if (w.Rdt.Cache.Min == nil && w.Rdt.Cache.Max == nil) ||
+				(req.UseCache && (*w.Rdt.Cache.Max == *w.Rdt.Cache.Min && *w.Rdt.Cache.Max > 0 ||
+					*w.Rdt.Cache.Max != *w.Rdt.Cache.Min && mbaValue == mbaMaxValue ||
+					*w.Rdt.Cache.Max == 0 && *w.Rdt.Cache.Min == 0 && mbaValue == mbaMaxValue)) {
+				req.UseMba = true
+			} else {
+				req.UseMba = false
+				log.Error("Mba can be used only guaranteed Cache Request")
+				return rmderror.NewAppError(http.StatusInternalServerError,
+					"MBA is only supported for Guarantee Cache Request")
+			}
 		}
 	} else {
 		policy, err := policy.GetDefaultPolicy(w.Policy)
@@ -659,43 +967,29 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 				"Could not find the Policy.", err)
 		}
 
-		maxWays, errMax := strconv.Atoi(policy["cache"]["max"])
-		if errMax == nil {
-			req.MaxWays = uint32(maxWays)
-		} else {
+		maxWays, okMax := policy["cache"]["max"].(int64)
+		if !okMax {
 			log.Error("Max cache reading error - cache way assignment will be skipped")
+		} else {
+			req.MaxWays = uint32(maxWays)
 		}
 
-		minWays, errMin := strconv.Atoi(policy["cache"]["min"])
-		if errMin == nil {
-			req.MinWays = uint32(minWays)
-		} else {
+		minWays, okMin := policy["cache"]["min"].(int64)
+		if !okMin {
 			log.Error("Min cache reading error - cache way assignment will be skipped")
+		} else {
+			req.MinWays = uint32(minWays)
 		}
 
 		// use cache params only if both defined
-		if errMax == nil && errMin == nil {
+		if okMax && okMin {
 			req.UseCache = true
 		}
+	}
 
-		// check if Power/P-State module is enabled
-		if pstate.Instance != nil {
-			log.Debugf("Get pstate params for %s policy and populate enforce request", w.Policy)
-			if ratioString, ok := policy["pstate"]["ratio"]; ok {
-				// convert string to float64
-				ratio, err := strconv.ParseFloat(ratioString, 64)
-				if err != nil {
-					return rmderror.NewAppError(http.StatusInternalServerError,
-						"Broken policy for P-State", err)
-				}
-				req.PState = true
-				req.PStateBR = ratio
-				req.PStateMonitoring = true
-			} else {
-				return rmderror.NewAppError(http.StatusInternalServerError,
-					"Error while getting Ratio from P-State policy", err)
-			}
-		}
+	if req.MinWays > req.MaxWays {
+		return rmderror.NewAppError(http.StatusInternalServerError,
+			"Min cache value cannot be greater than max cache value")
 	}
 
 	if req.UseCache {
@@ -713,18 +1007,33 @@ func populateEnforceRequest(req *wltypes.EnforceRequest, w *wltypes.RDTWorkLoad)
 
 func newResAss(r map[string]*libutil.Bitmap, level string) *resctrl.ResAssociation {
 	newResAss := resctrl.ResAssociation{}
-	newResAss.Schemata = make(map[string][]resctrl.CacheCos)
+	newResAss.CacheSchemata = make(map[string][]resctrl.CacheCos)
 
 	targetLev := "L" + level
+
+	// fmt.Println("newResAss : ", r)
 
 	for k, v := range r {
 		cacheID, _ := strconv.Atoi(k)
 		newcos := resctrl.CacheCos{ID: uint8(cacheID), Mask: v.ToString()}
-		newResAss.Schemata[targetLev] = append(newResAss.Schemata[targetLev], newcos)
+		newResAss.CacheSchemata[targetLev] = append(newResAss.CacheSchemata[targetLev], newcos)
 
 		log.Debugf("Newly created Mask for Cache %s is %s", k, newcos.Mask)
 	}
 	return &newResAss
+}
+
+func newResAssForMba(resAss *resctrl.ResAssociation, candidate map[string]*uint32, targetMba string) *resctrl.ResAssociation {
+	if resAss == nil {
+		resAss = &resctrl.ResAssociation{}
+	}
+	resAss.MbaSchemata = make(map[string][]resctrl.MbaCos)
+	for k, v := range candidate {
+		MbaID, _ := strconv.Atoi(k)
+		newcos := resctrl.MbaCos{ID: uint8(MbaID), Mba: *v}
+		resAss.MbaSchemata[targetMba] = append(resAss.MbaSchemata[targetMba], newcos)
+	}
+	return resAss
 }
 
 // shrinkBEPool requres to provide cacheid of the request, MinCache ways (
@@ -753,13 +1062,13 @@ func shrinkBEPool(resaall map[string]*resctrl.ResAssociation,
 				return nil, besteffortRes, fmt.Errorf(
 					"Internal error, can not find exsting workload for resource group name %s", name)
 			}
-			cosSchemata, _ := cache.BitmapsCacheWrapper(v.Schemata["L"+targetLev][cacheID].Mask)
+			cosSchemata, _ := cache.BitmapsCacheWrapper(v.CacheSchemata["L"+targetLev][cacheID].Mask)
 			// TODO: need find a better way to reduce the cache way fragments
 			// as currently we are using map to keep resctrl group, it's non-order
 			// so it's little hard to get which resctrl group next to which.
 			// just using max - min slot to shrink the cache. Hence, the result
 			// would only shrink one of the resource group to min one
-			minSchemata := cosSchemata.GetConnectiveBits(*ws[0].Cache.Min, 0, false)
+			minSchemata := cosSchemata.GetConnectiveBits(*ws[0].Rdt.Cache.Min, 0, false)
 			availableSchemata = availableSchemata.Axor(minSchemata)
 		}
 	}
@@ -770,11 +1079,11 @@ func shrinkBEPool(resaall map[string]*resctrl.ResAssociation,
 	// loop besteffortRes to find which association need to be changed.
 	changedRes := make(map[string]*resctrl.ResAssociation)
 	for name, v := range besteffortRes {
-		cosSchemata, _ := cache.BitmapsCacheWrapper(v.Schemata["L"+targetLev][cacheID].Mask)
+		cosSchemata, _ := cache.BitmapsCacheWrapper(v.CacheSchemata["L"+targetLev][cacheID].Mask)
 		tmpSchemataStr := cosSchemata.Axor(candidateSchemata).ToString()
 		if tmpSchemataStr != cosSchemata.ToString() {
 			// Changing pointers, the change will be reflact to the origin one
-			v.Schemata["L"+targetLev][cacheID].Mask = tmpSchemataStr
+			v.CacheSchemata["L"+targetLev][cacheID].Mask = tmpSchemataStr
 			changedRes[name] = v
 		}
 	}
@@ -871,7 +1180,6 @@ func updateInDB(w *wltypes.RDTWorkLoad) error {
 
 // Validate the request workload object is validated.
 func Validate(w *wltypes.RDTWorkLoad) error {
-
 	err := validate(w)
 	if err != nil {
 		log.Errorf("Failed to validate workload due to reason: %s", err.Error())
@@ -883,12 +1191,14 @@ func Validate(w *wltypes.RDTWorkLoad) error {
 		log.Errorf("Failed to validate workload in database due to reason: %s", err.Error())
 		return err
 	}
-
 	return nil
 }
 
 // Update a workload
 func Update(w, patched *wltypes.RDTWorkLoad) error {
+
+	dbContentValidation()
+
 	err := update(w, patched)
 	if err != nil {
 		log.Error("Failed to update/patch workload")
@@ -913,6 +1223,85 @@ func Init() error {
 		log.Error("Cannot create database")
 	} else {
 		workloadDatabase = temp
+		go startDBContentValidation()
+	}
+	// CLOS pool has to be initialized before it can be used
+	if err := pqos.InitCLOSPool(); err != nil {
+		log.Errorf("Failed to initialize CLOS pool: %v", err.Error())
+		return errors.New("CLOS pool initialization failure")
+	}
+	isMbaSupported, err = proc.IsMbaAvailable()
+	if err != nil {
+		return err
+	}
+	isL3CATSupported, err = proc.IsL3CatAvailable()
+	if err != nil {
+		return err
+	}
+	// Additional check for MBA mode (configured vs. used in workloads in db) needed due to 2 MBA modes and PQOS usage
+	// NOTE TODO: In future it will be good to validate param of each plugin (including RDT) used in stored workloads
+	// - get all stored workloads
+	allWorkloads, err := workloadDatabase.GetAllWorkload()
+	if err != nil {
+		return fmt.Errorf("Failed to get data from DB during workload.Init(): %v", err.Error())
+	}
+	if len(allWorkloads) > 0 {
+		// - get configured MBA mode
+		rdtc := cacheconf.RDTConfig{MBAMode: "percentage"} // default value used if not set in config file
+		err = viper.UnmarshalKey("rdt", &rdtc)
+		if err != nil {
+			return errors.New("Failed to check RDT config in rmd.toml")
+		}
+		var forceFlag bool
+		forceFlagVar := pflag.Lookup("force-config")
+		// additional safety check for unit tests (as pflag is not initialized then)
+		if forceFlagVar != nil {
+			forceFlagString := forceFlagVar.Value.String()
+			if strings.ToLower(forceFlagString) == "true" {
+				forceFlag = true
+			}
+		}
+		// end of safety check
+		var invalidWl bool
+		for _, wl := range allWorkloads {
+			// by default assume that workload is OK
+			invalidWl = false
+			if wl.Rdt.Mba.Percentage != nil && rdtc.MBAMode != "percentage" {
+				// mark as invalid
+				invalidWl = true
+			}
+			if wl.Rdt.Mba.Mbps != nil && rdtc.MBAMode != "mbps" {
+				// mark as invalid
+				invalidWl = true
+			}
+			if invalidWl {
+				// if force flag set - remove workload, otherwise return with error
+				if forceFlag {
+					// delete workload from database (it should be already removed from platform by root process)
+					log.Warningf("Workload %v contains incorrect MBA mode - removing from database", wl.ID)
+					workloadDatabase.DeleteWorkload(&wl)
+				} else {
+					return fmt.Errorf("Workload in database contains MBA setting (percentage) not compatible with current configuration (%v)", rdtc.MBAMode)
+				}
+			} else {
+				// workload is valid so check it's cos_name and mark it as used
+				if len(wl.CosName) > 0 {
+					err := pqos.MarkCLOSasUsed(wl.CosName)
+					if err != nil {
+						return fmt.Errorf("Problem with CLOS of workload from database: %v", err.Error())
+					}
+				}
+			}
+		}
+	}
+
+	if isMbaSupported {
+		isMbaMbpsAvailable = proc.GetMbaMbpsMode()
+		if isMbaMbpsAvailable {
+			mbaMaxValue = cache.MaxMBAMbps
+		} else {
+			mbaMaxValue = cache.MaxMBAPercentage
+		}
 	}
 	return err
 }
@@ -927,23 +1316,23 @@ func prepareCoreIDs(w []string) ([]int, error) {
 		dashPosition := strings.Index(value, "-")
 		if dashPosition != (-1) {
 			// '-' exists
-			beforeDashStr := value[:dashPosition]
-			afterDashStr := value[dashPosition+1:]
+			beforeDashStr := strings.TrimSpace(value[:dashPosition])
+			afterDashStr := strings.TrimSpace(value[dashPosition+1:])
 
 			beforeDash, err := strconv.Atoi(beforeDashStr)
 			if err != nil {
-				log.Errorf("Failed to convert coreID value from string to int")
+				log.Errorf("Failed to convert coreID value %v from string to int", beforeDashStr)
 				return coreids, err
 			}
 
 			afterDash, err := strconv.Atoi(afterDashStr)
 			if err != nil {
-				log.Errorf("Failed to convert coreID value from string to int")
+				log.Errorf("Failed to convert coreID value %v from string to int", afterDashStr)
 				return coreids, err
 			}
 			// syntax like "8-3" is wrong so need additional check here
 			if beforeDash > afterDash {
-				log.Errorf("Failed to convert coreID value from string to int")
+				log.Errorf("Wrong syntax for coreIDs -> %s", value)
 				return coreids, fmt.Errorf("Wrong syntax for coreIDs")
 			}
 
@@ -953,7 +1342,7 @@ func prepareCoreIDs(w []string) ([]int, error) {
 				i++
 			}
 		} else {
-			intid, err := strconv.Atoi(value)
+			intid, err := strconv.Atoi(strings.TrimSpace(value))
 			if err != nil {
 				log.Errorf("Invalid core id %s - cannot continue", value)
 				return coreids, fmt.Errorf("Invalid core id in array: %s", value)
@@ -963,4 +1352,61 @@ func prepareCoreIDs(w []string) ([]int, error) {
 	}
 
 	return coreids, nil
+}
+
+// shouldRemoveWorkload checks if all processes for workload exists
+// return false if at least one task from workload still exists in the system
+func shouldRemoveWorkload(w *wltypes.RDTWorkLoad) bool {
+
+	for _, task := range w.TaskIDs {
+
+		result, err := os.Stat("/proc/" + task)
+		if (err == nil) && (result.IsDir() == true) {
+			return false
+		}
+	}
+	//workload should be removed
+	return true
+}
+
+func startDBContentValidation() {
+	appconf := appConf.NewConfig()
+	interval := appconf.Def.DbValidatorInterval
+	if interval <= 0 {
+		log.Errorf("Failed to start DBValidator due to wrong interval value: %v", interval)
+		return
+	}
+	for {
+		dbContentValidation()
+		time.Sleep(time.Duration(interval) * time.Second)
+	}
+}
+
+// dbContentValidation checks DB for outdated workloads
+// when related taskIDs/processIDs don't exist anymore
+func dbContentValidation() {
+
+	l.Lock()
+	defer l.Unlock()
+	ws, err := GetAll()
+	if err == nil {
+		for _, singleWorkload := range ws {
+			// validation only for workloads/policies related with taskID/processID
+			if len(singleWorkload.TaskIDs) != 0 {
+				// remove from DB workloads which are related with not existing
+				// any more tasks/processes in the system (remove when all tasks doesn't exist)
+				if shouldRemoveWorkload(&singleWorkload) {
+					err := Delete(&singleWorkload)
+					if err != nil {
+						// just log here
+						log.Errorf("dbContentValidation failed to delete invalid workload from db: %s", err)
+					}
+					// inform about deleted workloads
+					log.Infof("Workload %v deleted by DBValidator", singleWorkload)
+				}
+			}
+		}
+	} else {
+		log.Errorf("dbContentValidation failed to validate DB for outdated workloads")
+	}
 }

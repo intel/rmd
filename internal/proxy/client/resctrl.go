@@ -8,8 +8,8 @@ import (
 )
 
 // GetResAssociation returns all resource group association
-func GetResAssociation() map[string]*resctrl.ResAssociation {
-	return resctrl.GetResAssociation()
+func GetResAssociation(availableCLOS []string) map[string]*resctrl.ResAssociation {
+	return resctrl.GetResAssociation(availableCLOS)
 }
 
 // GetRdtCosInfo returns RDT information
@@ -24,6 +24,7 @@ func IsIntelRdtMounted() bool {
 
 // Commit resctrl.ResAssociation with given name
 func Commit(r *resctrl.ResAssociation, name string) error {
+	// fmt.Println("CLient Side Commit : ", name, r)
 	// TODO how to get error reason
 	req := types.ResctrlRequest{
 		Name: name,
@@ -41,8 +42,12 @@ func DestroyResAssociation(name string) error {
 
 // RemoveTasks moves tasks to default resource group
 func RemoveTasks(tasks []string) error {
-	// TODO how to get error reason
 	return Client.Call("Proxy.RemoveTasks", tasks, nil)
+}
+
+// RemoveCores moves cores to default resource group
+func RemoveCores(cores []string) error {
+	return Client.Call("Proxy.RemoveCores", cores, nil)
 }
 
 // EnableCat enable cat feature on host
@@ -55,4 +60,10 @@ func EnableCat() error {
 		return nil
 	}
 	return fmt.Errorf("Can not enable cat")
+}
+
+// ResetCOSParamsToDefaults resets L3 cache and MBA to default values for common COS#
+func ResetCOSParamsToDefaults(cosName string) error {
+	// Call PQOS Wrapper
+	return Client.Call("Proxy.ResetCOSParamsToDefaults", cosName, nil)
 }

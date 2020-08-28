@@ -54,12 +54,14 @@ DIRS_TO_TEST=`for ff in \`find . -name "*.go" | cut -f2 -d"/" | grep -v '/test/'
 
 cd $BASE/..
 if [ "$1" == "-u" ]; then
+    mount -t resctrl resctrl /sys/fs/resctrl
     go test $GOBUILDOPTS -short -v -cover $DIRS_TO_TEST
     exit $?
 fi
 
 if [ "$1" != "-i" -a "$1" != "-s" ]; then
-    go test $GOBUILDOPTS -short -v -cover "$DIRS_TO_TEST"
+    mount -t resctrl resctrl /sys/fs/resctrl
+    go test $GOBUILDOPTS -short -v -cover $DIRS_TO_TEST
 fi
 cd -
 
@@ -89,8 +91,8 @@ if [ -d "$RESDIR" ] && mountpoint $RESDIR > /dev/null 2>&1 ; then
     fi
 fi
 
-# not support -o cdp
-mount -t resctrl resctrl /sys/fs/resctrl
+# to have "clean" situation before functional tests
+umount /sys/fs/resctrl
 
 # Set a unused random port
 CHECK="do while"

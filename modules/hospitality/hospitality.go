@@ -61,14 +61,27 @@ func (h *Hospitality) GetByRequest(req *Request) error {
 				"Can not find Policy", err)
 		}
 		//get max cache
-		m, err := strconv.Atoi(tier["cache"]["max"])
-		if err != nil {
+		mAsInterface, ok := tier["cache"]["max"]
+		if !ok {
 			return rmderror.NewAppError(http.StatusInternalServerError,
 				"Error to get max cache", err)
 		}
+
+		m, ok := mAsInterface.(int)
+		if !ok {
+			return rmderror.NewAppError(http.StatusInternalServerError,
+				"Error to get max cache", err)
+		}
+
 		//get min cache
-		n, err := strconv.Atoi(tier["cache"]["min"])
-		if err != nil {
+		nAsInterface, ok := tier["cache"]["min"]
+		if !ok {
+			return rmderror.NewAppError(http.StatusInternalServerError,
+				"Error to get min cache", err)
+		}
+
+		n, ok := nAsInterface.(int)
+		if !ok {
 			return rmderror.NewAppError(http.StatusInternalServerError,
 				"Error to get min cache", err)
 		}
@@ -95,7 +108,7 @@ func (h *Hospitality) GetByRequestMaxMin(max, min uint32, cacheIDuint *uint32, t
 			"Bad request, max_cache=%d, min_cache=%d", max, min)
 	}
 
-	resaall := proxyclient.GetResAssociation()
+	resaall := proxyclient.GetResAssociation(nil)
 
 	av, err := cache.GetAvailableCacheSchemata(resaall, []string{"infra", "."}, reqType, "L"+targetLev)
 	if err != nil && !strings.Contains(err.Error(), "error doesn't support pool") {

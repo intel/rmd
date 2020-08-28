@@ -17,17 +17,11 @@ you can find the download links from [release notes](https://github.com/intel/rm
 
 ### Setup configuration file
 
-RMD has some default configurations, you may also find some configure file
-example from this [samples](../etc/rmd).
+RMD has some default configurations, you may also find some configure file example from this [samples](../etc/rmd).
 
-Most of the configuration files are in [TOML](https://github.com/toml-lang/toml) format.
-Users can create their own configuration files by referring the following
-sample. And RMD also provides the script(cmd/gen_conf.go) to generate it
-by probing the local host platform capabilities for proper CachePool settings.
+Most of the configuration files are in [TOML](https://github.com/toml-lang/toml) format. Users can create their own configuration files by referring the following sample. Also RMD provides the config generation tool (*gen_conf*) that creates sample config file with correct CachePool settings based on data captured by probing the local host platform capabilities.
 
-RMD will try to search `/etc/rmd` to find
-configure files, put configuration files into these directory or RMD will
-use default configurations.
+RMD will try to search `/etc/rmd` to find configure files, put configuration files into these directory or RMD will use default configurations.
 
 Default location for main RMD configuration file is: /etc/rmd/rmd.toml
 
@@ -36,6 +30,9 @@ Default location for main RMD configuration file is: /etc/rmd/rmd.toml
 Below extract from main configuration file (rmd.toml) presents sample Cache module configuration
 
 ```
+[rdt]
+mbaMode = "percentage" # MBA mode of operation, possible options are: "none", "percentage" (used by default) and "mbps"
+
 [OSGroup] # mandatory
 cacheways = 1
 cpuset = "0-1"
@@ -57,6 +54,7 @@ shared = 2
 
 Comments of the directives in the above conf:
 
+* rdt: section for RDT related params like desired MBA mode of operation
 * OSGroup: cache ways reserved for operating system usage.
 * InfraGroup: infrastructure tasks group, user can specify task binary name
               the cache ways will be shared with other workloads
@@ -81,32 +79,6 @@ guarantee:  0000 0000 0111 1111 1110
 besteffort: 0011 1111 1000 0000 0000
 shared:     1100 0000 0000 0000 0000
 ```
-
-#### P-State module configuration and usage
-
-P-State module is designed to change CPU core frequency based on it's load defined as a branch prediction miss/hits ratio.
-If current branch ratio is higher than selected threshold then CPU core frequency is set to predefined maximal value (can be CPU max frequency).
-When branch ratio on given core falls below the selected threshold then core frequency is set to minimal.
-
-Below extract from main configuration file (*rmd.toml*) presents sample configuration for optional P-State module.
-
-```
-[pstate]
-## Simple plugin enable/disable flag
-enabled = true
-## path to loadable plugin file (.so library) with P-State implementation
-path = "/etc/rmd/plugins/pstatelib.so"
-## port number with plugin's http server (REST API)
-port = 8080
-```
-
-This module is not an integral part of RMD binary but a loadable external plugin. To have P-State module working it is necessary to add section from above to *rmd.toml* and also provide *.so* file with plugin implementation.
-
-While providing plugin binary and setting the ***path*** it is crucial to remember that this location (thus this file) has to be readable for both *root* and *rmd* user. Otherwise RMD processes will not be able to load and use plugin library.
-
-If ***enabled*** flag is set to *false* plugin file existence will not be checked and plugin will not be loaded (even if exists).
-
-***port*** is the number of listening port where branch_monitor's http server with REST API is available.
 
 ### Prepare the credentials
 
@@ -141,6 +113,35 @@ several things by themselves.
     ```
     *Note: Only root user can setup or access users in Berkeley database*
 
+### Overwriting configuration parameters
+
+Some configuration params set in *rmd.toml* can be easily changed during RMD start without need of editing input files. RMD accepts set of command line parameters that allows to overwrite some settings for current launch. List of all possible RMD parameters cane be obtained using *--help* RMD option:
+
+```shell
+sudo rmd --help
+```
+
+and is show in table below:
+
+| Option (short) | Option (long) | Description |
+| ---: | :---: | :--- |
+|    | --address \<string\> | Listen address (default "localhost") |
+|    | --alsologtostderr | Log to standard error as well as files |
+|    | --clientauth \<string\> | The policy the server will follow for TLS Client Authentication (default "challenge") |
+|    | --conf-dir \<string\> | Directory of config file |
+| -d | --debug | Enable debug |
+|    | --debugport \<int\> | Debug listen port (default 8081) |
+|    | --force-config | Force settings from config file if different than current platform setting. USE THIS OPTION WITH CARE as it can reset *resctrl* and remove workloads with incompatible MBA mode used
+|    | --log-backtrace-at *traceLocation* | when logging hits line file:N, emit a stack trace (default :0) |
+|    | --log-dir \<string\> | If non-empty, write log files in this directory |
+|    | --logtostderr | log to standard error instead of files |
+|    | --stderrthreshold *severity* | logs at or above this threshold go to stderr (default 2) |
+|    | --tlsport \<int\> | TLS listen port (default 8443) |
+|    | --unixsock \<string\> | Unix sock file path |
+| -v | --v *Level* | log level for V logs |
+|    | --version | Print RMD version |
+|    | --vmodule *moduleSpec* | comma-separated list of pattern=N settings for file-filtered logging |
+
 ## Run in docker container
 
 ### Build RMD docker image
@@ -153,6 +154,29 @@ $ sudo docker run  --privileged -v /proc:/proc \
         -v /sys/fs/resctrl:/sys/fs/resctrl:rw \
         --address 0.0.0.0
 ```
+
+## Enable OpenStack integration
+
+RMD is prepared to be controlled by OpenStack but by default this feature is disabled at build process level.
+
+To enable OpenStack integration user has to build RMD binary with additional flag:
+
+```shell
+$ make BUILD_TYPE=openstack
+```
+
+This flag has impact on both RMD and gen_conf binary to provide proper sample config generation. Same flag should be used to launch OpenStack tests:
+
+```shell
+$ make BUILD_TYPE=openstack test-unit
+```
+
+OpenStack related configuration consist of two parts:
+
+* *openstackenable* flag in *[default]* section
+* *[openstack]* section with full configuration
+
+Please see sample *rmd.toml* in etc/rmd subfolder of RMD repo for more details.
 
 ## Run the service
 
@@ -170,6 +194,8 @@ $ sudo rmd --debug
 ```
 
 ## RMD service usages
+
+In this section, RMD is launched in debug mode and API calls uses insecure HTTP connection. See [possible connection types](#supported-rmd-access-modes) for more details.
 
 ### Query cache information on the host
 
@@ -197,80 +223,144 @@ The task(s)/CPU(s) will be verified, otherwise RMD will fail your request.
 
 Besides you need to specify what policy of the workload will be used.
 
-Depending on available modules the payload body can contain only Cache related params:
+If there's no available plugins (loadable modules) the payload body can contain only *cache* related params:
 
 ```json
 {
     "task_ids": [ "A validate task id list" ],
     "core_ids": [ "cpu core list, for the topology, check cache information" ],
     "policy": "pre-defined policy in RMD",
-    "cache" : {
-        "max": "maximum cache ways which can be benefited",
-        "min": "minmum cache ways which can be benefited"
+    "rdt" : {
+        "cache" : {
+            "max" : "maximum cache ways which can be benefited",
+            "min" : "minimum cache ways which can be benefited"
+        }
     }
 }
 ```
 
-or also P-State params
+or *cache* and *mba* if MBA (Memory Bandwidth Allocation) support is available on platform:
 
 ```json
 {
     "task_ids": [ "A validate task id list" ],
     "core_ids": [ "cpu core list, for the topology, check cache information" ],
     "policy": "pre-defined policy in RMD",
-    "cache" : {
-        "max": "maximum cache ways which can be benefited",
-        "min": "minmum cache ways which can be benefited"
+    "rdt" : {
+        "cache" : {
+            "max" : "maximum cache ways which can be benefited",
+            "min" : "minimum cache ways which can be benefited"
+        },
+        "mba" : {
+            "percentage" : "MBA assignment in percents"
+        }
+    }
+}
+```
+
+MBA can also work in *controller mode* and specify resource in Mbps:
+```json
+{
+    "task_ids": [ "A validate task id list" ],
+    "core_ids": [ "cpu core list, for the topology, check cache information" ],
+    "policy": "pre-defined policy in RMD",
+    "rdt" : {
+        "cache" : {
+            "max" : "maximum cache ways which can be benefited",
+            "min" : "minimum cache ways which can be benefited"
+        },
+        "mba" : {
+            "mbps" : "MBA assignment in Mbps"
+        }
+    }
+}
+```
+
+
+If some additional plugins are loaded (like *pstate* - external plugin shipped separately) necessary params should be placed in *plugins* section:
+
+```json
+{
+    "task_ids": [ "A validate task id list" ],
+    "core_ids": [ "cpu core list, for the topology, check cache information" ],
+    "policy": "pre-defined policy in RMD",
+    "rdt" : {
+        "cache" : {
+            "max" : "maximum cache ways which can be benefited",
+            "min" : "minimum cache ways which can be benefited"
+        },
+        "mba" : {
+            "percentage" : "MBA assignment in percents"
+        }
     },
-    "pstate" : {
-        "ratio": "P-State branch ratio",
-        "monitoring": "core(s) monitoring (on or off)"
+    "plugins": {
+        "pstate" : {
+            "ratio": "P-State branch ratio",
+            "monitoring": "core(s) monitoring (on or off)"
+        }
     }
 }
 ```
 
-For more information about enabling P-State module see [this section](#p-state-module-configuration-and-usage).
+For more information about enabling additional modules see *ConfigurationGuide* from RMD documentation.
 
-Policy (if defined) has higher priority than manually specified params. If policy given
-in workload creation request then max_cache, min_cache, pstate_br and monitoring are not
-needed (ignored if provided).
+Policy (if defined) has higher priority than manually specified params. If policy given in a workload creation request then parameters for RDT module (like *rdt:cache:max* and *rdt:cache:min*) and parameters for all plugins (inside *plugins* section) are not needed and ignored if provided.
 
 An example:
 
-1) Create a workload with gold policy, let say you have a running process
-with process id `78377`
+1) Create a workload with gold policy for running process with process id `78377`:
 
 ```shell
 $ curl -H "Content-Type: application/json" --request POST --data \
-         '{"task_ids":["78377"],
-           "policy": "gold"}' \
-         http://127.0.0.1:8081/v1/workloads
+        '{"task_ids":["78377"],
+            "policy": "gold"
+        }' \
+        http://127.0.0.1:8081/v1/workloads
 ```
 
-2) Create workload with manually specified parameters without P-State plugin data.
+2) Create workload with manually specified cache parameters:
 
 ```shell
 $ curl -H "Content-Type: application/json" --request POST --data \
-         '{"task_ids" : ["78377"],
-           "cache" : {"max": 4, "min": 4 } }' \
-         http://127.0.0.1:8081/v1/workloads
+        '{"task_ids" : ["78377"],
+            "rdt" : {
+                "cache" : {"max": 4, "min": 4 }
+            }
+        }' \
+        http://127.0.0.1:8081/v1/workloads
 ```
 
-Please note that it is not allowed (and treated as error) to provide *pstate* parameters section if P-State plugin not enabled in configuration.
+Please note that it is not allowed (and treated as error) to provide parameters section for plugin that is not loaded (not enabled and properly configured in *rmd.toml*).
 
-3) Create workload with manually specified parameters with P-State plugin enabled
+3) Create workload with manually specified parameters for Cache and enabled P-State plugin:
 
 ```shell
 $ curl -H "Content-Type: application/json" --request POST --data \
-         '{"task_ids" : ["78377"],
-           "cache" : {"max": 4, "min": 4 },
-           "pstate" : {"ratio": 3.0, "monitoring" : "on"} }' \
-         http://127.0.0.1:8081/v1/workloads
+        '{"task_ids" : ["78377"],
+            "rdt": {
+                "cache" : {"max": 4, "min": 4 },
+            },
+            "plugins" : {
+                "pstate" : {"ratio": 3.0, "monitoring" : "on"}
+            }
+        }' \
+        http://127.0.0.1:8081/v1/workloads
 ```
 
-Last param, *monitoring*, can be omitted when defining *ratio* and then the default value "on" will be used.
+4) Create workload for CPU cores 4, 5 and 6 with manually specified parameters for Cache and MBA (in default, percentage mode):
 
-3) Delete a workload by the workload id, you will find it from the
+```shell
+$ curl -H "Content-Type: application/json" --request POST --data \
+        '{"core_ids" : ["4", "5", "6"],
+            "rdt": {
+                "cache" : {"max": 4, "min": 4 },
+                "mba" : {"percentage" : 70 },
+            },
+        }' \
+        http://127.0.0.1:8081/v1/workloads
+```
+
+5) Delete a workload by the workload id, you will find it from the
 output of the create response.
 
 ```shell
@@ -317,6 +407,8 @@ $ curl -H "Content-Type: application/json" --request POST --data \
 }
 ```
 
+## Supported RMD access modes
+
 ### Access RMD by Unix socket:
 
 Access RMD by unit socket if it is enabled.
@@ -326,22 +418,42 @@ Requires curl >= v7.40.0
 $ sudo curl --unix-socket /your/socket/path http:/your/resource/url
 ```
 
-### Access RMD by TLS:
+### Access using HTTP requests over plain TCP connection
 
-Access RMD by TLS if it is enabled.
+This method is prepared mainly for RMD development and debugging purposes and is not recommended for use in production system.
 
-Need to config tlsport, certpath, clientcapath, clientauth options in
-configure file.
+For testing purpose, to access REST API with TLS channel disabled, please configure *debugport* param in *debug* section and launch RMD in debug mode:
 
-Using TLS and managing a CA is an advanced topic. It is not the scope of RMD.
-RMD just pre-define server certs for testing.
-
-Please do not use them in product environment.
-User can generate certs by themselves.
-
-If you want to get cache info, your can run this command:
 ```shell
-$ curl https://hostname:port/v1/cache --cert etc/rmd/cert/client/cert.pem \
+$ /path/to/rmd -d
+```
+
+or
+
+```shell
+$ /path/to/rmd --debug
+```
+
+Access to API can done by any HTTP client, like *curl*:
+
+```shell
+$ curl -i -X GET http://hostname:debugport/v1/cache
+```
+
+### Access using HTTPS over TCP connection secured by TLS:
+
+REST interface of the RMD is recommended to be used over TLS secure channel. RMD supports TLS version 1.2 with cipher suite set to *AES_128_GCM_SHA256* to provide acceptable level of security.
+
+To enable TLS connection, one has to configure *tlsport*, *certpath*, *clientcapath* and *clientauth* options in main configuration file (*rmd.toml*). Also necessary certificates (for client, sever and CA - Certificate authority) have to be provided. Additionally RMD cannot be launched in debug mode (see previous section).
+
+Certificate authority management and certificate generation is out of scope of RMD. For testing purposes, RMD provides pre-defined set of certificates. Please do ***not use these certificates in production environment***.
+
+To access RMD REST API using secure connection use HTTPS protocol and configured *tlsport*. Also provides necessary certificate chain (CA certificate, client certificate and client private key.
+
+Sample command for getting cache info over TLS connection using curl is shown below:
+
+```shell
+$ curl https://hostname:tlsport/v1/cache --cert etc/rmd/cert/client/cert.pem \
          --key etc/rmd/cert/client/key.pem \
          --cacert  etc/rmd/cert/client/ca.pem
 ```

@@ -6,32 +6,32 @@ package template
 
 // Options are options for temlate will be replaced
 var Options = map[string]interface{}{
-	"address":            "localhost",
-	"debugport":          8081,
-	"tlsport":            8443,
-	"clientauth":         "challenge",
-	"logfile":            "/var/log/rmd.log",
-	"dbbackend":          "bolt",
-	"dbtransport":        "/var/run/rmd.db",
-	"logtostdout":        true,
-	"os_cacheways":       1,
-	"infra_cacheways":    19,
-	"max_shared":         10,
-	"guarantee":          10,
-	"besteffort":         7,
-	"shared":             2,
-	"shrink":             false,
-	"policypath":         "/etc/rmd/policy.toml",
-	"sysresctrl":         "/sys/fs/resctrl",
-	"pstate_enable_flag": false,
-	"pstate_plugin_path": "/etc/rmd/plugins/pstatelib.so",
-	"pstate_port":        8080,
-	"providerConfigPath": "/etc/nova/provider_config/rmd.yaml",
-	"amqpuri":            "amqp://test:test@localhost:5672/",
-	"bindingKey":         "versioned_notifications.info",
-	"keystoneUrl":        "http://10.237.214.102/identity/v3/auth/tokens",
-	"keystoneLogin":      "admin",
-	"keystonePassword":   "nimda",
+	"address":             "localhost",
+	"debugport":           8081,
+	"tlsport":             8443,
+	"clientauth":          "challenge",
+	"logfile":             "/var/log/rmd.log",
+	"dbbackend":           "bolt",
+	"dbtransport":         "/var/run/rmd.db",
+	"logtostdout":         true,
+	"os_cacheways":        1,
+	"infra_cacheways":     19,
+	"max_shared":          10,
+	"guarantee":           10,
+	"besteffort":          7,
+	"shared":              2,
+	"shrink":              false,
+	"policypath":          "/etc/rmd/policy.toml",
+	"sysresctrl":          "/sys/fs/resctrl",
+	"plugins":             "",
+	"providerConfigPath":  "/etc/nova/provider_config/rmd.yaml",
+	"amqpuri":             "amqp://test:test@localhost:5672/",
+	"bindingKey":          "versioned_notifications.info",
+	"keystoneUrl":         "http://10.237.214.102/identity/v3/auth/tokens",
+	"keystoneLogin":       "admin",
+	"keystonePassword":    "nimda",
+	"dbValidatorInterval": 30, //seconds
+	"mbaMode":             "percentage",
 }
 
 // Templ is content of template
@@ -48,7 +48,12 @@ tlsport = {{.tlsport}}
 # clientcapath = "/etc/rmd/cert/client" # Only support pem format, hard code that CAFile is ca.pem
 clientauth = "{{.clientauth}}"  # can be "no, require, require_any, challenge_given, challenge", challenge means require and verify.
 # unixsock = "/var/run/rmd.sock"
+plugins = "{{.plugins}}" # comma separated list of enabled RMD plugins, for each plugin (ex. PLUGINX) appropriate config section (ex. [PLUGINX]) is needed
 openstackenable = true
+dbValidatorInterval = {{.dbValidatorInterval}}
+
+[rdt]
+mbaMode = "{{.mbaMode}}" # MBA mode of operation, possible options are: "none", "percentage" and "mbps"
 
 [log]
 path = "{{.logfile}}"
@@ -91,14 +96,6 @@ usercert = "/etc/rmd/acl/roles/user/" # A cert is used to describe user info. Th
 
 [pam]
 service = "rmd"
-
-[pstate]
-## Simple plugin enable/disable flag
-enabled = {{.pstate_enable_flag}}
-## path to loadable plugin file (.so library) with P-State implementation
-path = "{{.pstate_plugin_path}}"
-## port number with plugin's http server (REST API)
-port = {{.pstate_port}}
 
 [openstack]
 # Path below is optional. If not given then file will not be generated

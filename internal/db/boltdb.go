@@ -5,12 +5,14 @@ import (
 	"errors"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 
 	bolt "github.com/etcd-io/bbolt"
 
 	"github.com/intel/rmd/internal/db/config"
 	wltypes "github.com/intel/rmd/modules/workload/types"
+	util "github.com/intel/rmd/utils"
 )
 
 var boltSession *bolt.DB
@@ -28,6 +30,22 @@ func getSession() error {
 	var err error
 	boltSessionOnce.Do(func() {
 		conf := config.NewConfig()
+		var isfile bool
+		isfile, err = util.IsRegularFile(conf.Transport)
+		if err != nil {
+			// if error is "no such file or directory" then it is a recoverable situation
+			// otherwise error should be forwarded
+			if !strings.Contains(err.Error(), "no such file") {
+				boltSession = nil
+				err = errors.New("Provided database path is not a regular file")
+				return
+			}
+		} else if !isfile {
+			boltSession = nil
+			err = errors.New("Provided database path is not a regular file")
+			return
+		}
+		// no error till now - open/recreate database file
 		boltSession, err = bolt.Open(conf.Transport, 0600, nil)
 	})
 	return err

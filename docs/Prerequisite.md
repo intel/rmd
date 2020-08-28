@@ -16,8 +16,9 @@ RMD requires specific hardware support. It requires the host to have
 
 ## Software
 
-RMD cache module depends on linux `resctrl` sysfs. For `resctrl` support upstream linux kernel version
-should be higher than 4.10 or any linux distro which has enabled `resctrl` interface is needed.
+RMD CAT & MBA handling module depends on linux **resctrl sysfs** and **PQOS library**. Minimal required PQOS library version is **4.1**. PQOS is initialized with OS driver support only - MSR is not supported.
+
+For *resctrl* support upstream linux kernel version should be higher than *4.10* for CAT and MBA in default mode. To use MBA in controller mode (Mbps configuration) at least kernel *4.18* is required. In case of linux distribution specific kernels please check distro documentation for *resctrl* and *MBA* support.
 
 To check if your host supports `resctrl` or not, check the out put of this
 command line:
@@ -26,7 +27,7 @@ command line:
 cat /proc/filesystems  | grep resctrl
 ```
 
-Optional external `pstate` module requires `intel_pstate` or `acpi` CPU scaling driver to monitor and change the CPU cores frequencies.
+Optional external *pstate* module requires *intel_pstate* or *acpi* CPU scaling driver to monitor and change the CPU cores frequencies.
 
 To check which driver is used on your host run following command in your Linux shell:
 

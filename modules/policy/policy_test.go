@@ -25,11 +25,18 @@ func init() {
 
 func Test_loadPolicy(t *testing.T) {
 
-	var cacheParam = Param{"max": "2", "min": "2"}
-	var pstateParam = Param{"ratio": "1.5"}
+	var cacheParam = Param{
+		"max": 2,
+		"min": 2,
+	}
+
+	var pstateParam = Param{
+		"ratio": 1.5,
+	}
+
 	var testModule = Module{"cache": cacheParam, "pstate": pstateParam}
 	var testPolicy = Policy{"gold": testModule}
-	var testArch = CPUArchitecture{"skylake": testPolicy}
+	var testArch = CPUArchitecture{"skylake": testPolicy, "broadwell": testPolicy}
 
 	tests := []struct {
 		name    string
@@ -46,6 +53,7 @@ func Test_loadPolicy(t *testing.T) {
 				t.Errorf("loadPolicy() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("loadPolicy() = %v, want %v", got, tt.want)
 			}
@@ -55,8 +63,8 @@ func Test_loadPolicy(t *testing.T) {
 
 func TestGetDefaultPlatformPolicy(t *testing.T) {
 
-	var cacheParam = Param{"max": "2", "min": "2"}
-	var pstateParam = Param{"ratio": "1.5"}
+	var cacheParam = Param{"max": 2, "min": 2}
+	var pstateParam = Param{"ratio": 1.5}
 	var testModule = Module{"cache": cacheParam, "pstate": pstateParam}
 	var testPolicy = Policy{"gold": testModule}
 
@@ -83,8 +91,8 @@ func TestGetDefaultPlatformPolicy(t *testing.T) {
 
 func TestLoadPolicyInfo(t *testing.T) {
 
-	var cacheParam = Param{"max": "2", "min": "2"}
-	var pstateParam = Param{"ratio": "1.5"}
+	var cacheParam = Param{"max": 2, "min": 2}
+	var pstateParam = Param{"ratio": 1.5}
 	var testModule = Module{"cache": cacheParam, "pstate": pstateParam}
 	var testPolicy = Policy{"gold": testModule}
 
@@ -111,8 +119,8 @@ func TestLoadPolicyInfo(t *testing.T) {
 
 func TestGetDefaultPolicy(t *testing.T) {
 
-	var cacheParam = Param{"max": "2", "min": "2"}
-	var pstateParam = Param{"ratio": "1.5"}
+	var cacheParam = Param{"max": 2, "min": 2}
+	var pstateParam = Param{"ratio": 1.5}
 	var testModule = Module{"cache": cacheParam, "pstate": pstateParam}
 
 	type args struct {

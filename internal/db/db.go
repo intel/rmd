@@ -104,8 +104,23 @@ func validateWorkload(w wltypes.RDTWorkLoad, ws []wltypes.RDTWorkLoad) error {
 
 	bminter := bm.And(bmsum)
 
+	var coreBits uint32
+	if bminter.Len > 0 {
+		coreBits = uint32(bminter.Bits[0])
+	}
+	var cores = []string{}
+	if bminter.Len > 0 && coreBits > 0 {
+		var bit uint32
+		for bit = 0; bit < uint32(bminter.Len); bit++ {
+			if (coreBits % 2) == 1 {
+				cores = append(cores, fmt.Sprint(bit))
+			}
+			coreBits = coreBits / 2
+		}
+	}
+
 	if !bminter.IsEmpty() {
-		return fmt.Errorf("CPU list %s has been assigned", bminter.ToString())
+		return fmt.Errorf("CPU list %s has been assigned", cores)
 	}
 
 	return nil

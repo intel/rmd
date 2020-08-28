@@ -15,7 +15,7 @@ import (
 
 func init() {
 	oscfg.KeystoneURL = "http://10.237.214.102/identity/v3/auth/tokens"
-	endpointsMap["nova"] = "http://localhost/compute/v2.1"
+	endpointsMap["nova"] = "http://10.237.214.102/compute/v2.1"
 	endpointsMap["swift"] = "http://10.237.214.102:8080/v1/AUTH_0ff337bec7d4415dbc60ffca09db14ef"
 }
 
@@ -195,7 +195,7 @@ func Test_obtainEndpoints(t *testing.T) {
 		{"Correct response without Swift", args{myResponse}},
 		{"Empty response", args{myResponse2}},
 		{"Empty catalog tag", args{myResponse3}},
-		{"Empty catalog tag", args{myResponse4}},
+		{"Malformed catalog tag", args{myResponse4}},
 		{"Correct response with Swift with AUTH", args{myResponse5}},
 		{"Correct response with Swift without AUTH", args{myResponse6}},
 	}
@@ -239,7 +239,7 @@ func Test_unMarshallGlanceWorkloadPolicyUUID(t *testing.T) {
 func Test_sendSingleQuery(t *testing.T) {
 
 	correctCase := []byte(`{"extra_specs": {"hw:cpu_policy": "shared", "rmd:glance_workload_policy_uuid": "123456678", "hw:cpu_thread_policy": "prefer"}}`)
-	correctURL := "http://localhost/compute/v2.1/flavors/c1/os-extra_specs"
+	correctURL := "http://10.237.214.102/compute/v2.1/flavors/c1/os-extra_specs"
 
 	body := `
 	{
@@ -266,10 +266,10 @@ func Test_sendSingleQuery(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("POST", "http://localhost/identity/v3/auth/tokens",
+	httpmock.RegisterResponder("POST", "http://10.237.214.102/identity/v3/auth/tokens",
 		httpmock.NewStringResponder(200, body))
 
-	httpmock.RegisterResponder("GET", "http://localhost/compute/v2.1/flavors/c1/os-extra_specs",
+	httpmock.RegisterResponder("GET", "http://10.237.214.102/compute/v2.1/flavors/c1/os-extra_specs",
 		httpmock.NewStringResponder(200, `{"extra_specs": {"hw:cpu_policy": "shared", "rmd:glance_workload_policy_uuid": "123456678", "hw:cpu_thread_policy": "prefer"}}`))
 
 	type args struct {
@@ -305,8 +305,8 @@ func Test_sendSingleQuery(t *testing.T) {
 func Test_sendQuery(t *testing.T) {
 
 	correctCase := []byte(`{"extra_specs": {"hw:cpu_policy": "shared", "rmd:glance_workload_policy_uuid": "123456678", "hw:cpu_thread_policy": "prefer"}}`)
-	correctURL := "http://localhost/compute/v2.1/flavors/c1/os-extra_specs"
-	wrongURL := "http://localhost/compute/v2.1/flavors/abcd/os-extra_specs"
+	correctURL := "http://10.237.214.102/compute/v2.1/flavors/c1/os-extra_specs"
+	wrongURL := "http://10.237.214.102/compute/v2.1/flavors/abcd/os-extra_specs"
 
 	body := `
 	{
@@ -333,13 +333,13 @@ func Test_sendQuery(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("GET", "http://localhost/compute/v2.1/flavors/c1/os-extra_specs",
+	httpmock.RegisterResponder("GET", "http://10.237.214.102/compute/v2.1/flavors/c1/os-extra_specs",
 		httpmock.NewStringResponder(200, `{"extra_specs": {"hw:cpu_policy": "shared", "rmd:glance_workload_policy_uuid": "123456678", "hw:cpu_thread_policy": "prefer"}}`))
 
-	httpmock.RegisterResponder("GET", "http://localhost/compute/v2.1/flavors/abcd/os-extra_specs",
+	httpmock.RegisterResponder("GET", "http://10.237.214.102/compute/v2.1/flavors/abcd/os-extra_specs",
 		httpmock.NewStringResponder(401, ``))
 
-	httpmock.RegisterResponder("POST", "http://localhost/identity/v3/auth/tokens",
+	httpmock.RegisterResponder("POST", "http://10.237.214.102/identity/v3/auth/tokens",
 		httpmock.NewStringResponder(200, body))
 
 	type args struct {
@@ -395,7 +395,7 @@ func Test_obtainToken(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("POST", "http://localhost/identity/v3/auth/tokens",
+	httpmock.RegisterResponder("POST", "http://10.237.214.102/identity/v3/auth/tokens",
 		httpmock.NewStringResponder(200, body))
 
 	tests := []struct {
@@ -428,16 +428,16 @@ func Test_getGlanceWorkloadPolicyByUUID(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("POST", "http://localhost/identity/v3/auth/tokens",
+	httpmock.RegisterResponder("POST", "http://10.237.214.102/identity/v3/auth/tokens",
 		httpmock.NewStringResponder(200, body))
 
-	httpmock.RegisterResponder("GET", "http://localhost/image/v2/images/fakeID/file",
+	httpmock.RegisterResponder("GET", "http://10.237.214.102/image/v2/images/fakeID/file",
 		httpmock.NewStringResponder(404, "{}"))
 
-	httpmock.RegisterResponder("GET", "http://localhost/image/realID/file",
+	httpmock.RegisterResponder("GET", "http://10.237.214.102/image/realID/file",
 		httpmock.NewStringResponder(200, `{"policy":"gold"}`))
 
-	httpmock.RegisterResponder("GET", "http://localhost/image/wrong/file",
+	httpmock.RegisterResponder("GET", "http://10.237.214.102/image/wrong/file",
 		httpmock.NewStringResponder(200, `{"polkscy":}`))
 
 	type args struct {
@@ -461,7 +461,7 @@ func Test_getGlanceWorkloadPolicyByUUID(t *testing.T) {
 
 			if tt.endpointExistsInMap == true {
 				//for some test we want to have proper record in endpointsMap
-				endpointsMap["glance"] = "http://localhost/image"
+				endpointsMap["glance"] = "http://10.237.214.102/image"
 			}
 			gotWorkload, err := getGlanceWorkloadPolicyByUUID(tt.args.imageID)
 
@@ -541,10 +541,10 @@ func Test_getWorkloadPolicyUUID(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 
-	httpmock.RegisterResponder("POST", "http://localhost/identity/v3/auth/tokens",
+	httpmock.RegisterResponder("POST", "http://10.237.214.102/identity/v3/auth/tokens",
 		httpmock.NewStringResponder(200, body))
 
-	httpmock.RegisterResponder("GET", "http://localhost/compute/v2.1/flavors/2/os-extra_specs",
+	httpmock.RegisterResponder("GET", "http://10.237.214.102/compute/v2.1/flavors/2/os-extra_specs",
 		httpmock.NewStringResponder(200, `{"extra_specs": {"hw:cpu_policy": "shared", "rmd:swift_workload_policy_url": "RmdPolicies/custom.json", "rmd:glance_workload_policy_uuid": "df1a5223-e297-40d9-9a58-32387a58bed7", "hw:cpu_thread_policy": "prefer"}}`))
 
 	type args struct {
@@ -578,7 +578,7 @@ func Test_getWorkloadPolicyUUID(t *testing.T) {
 
 			if tt.endpointExistsInMap == false {
 				//restore nova in endpointsMap
-				endpointsMap["nova"] = "http://localhost/compute/v2.1"
+				endpointsMap["nova"] = "http://10.237.214.102/compute/v2.1"
 			}
 
 		})
@@ -601,19 +601,10 @@ func Test_getSwiftWorkloadPolicyByURL(t *testing.T) {
 	}
 
 	var cachesValue uint32 = 4
-	pStateRatio := 3.0
-	pStateMonitoring := "on"
 
-	testWorkload2 := &workload.RDTWorkLoad{
-		Cache: struct {
-			Max *uint32 `json:"max,omitempty"`
-			Min *uint32 `json:"min,omitempty"`
-		}{&cachesValue, &cachesValue},
-		PState: struct {
-			Ratio      *float64 `json:"ratio,omitempty"`
-			Monitoring *string  `json:"monitoring,omitempty"`
-		}{&pStateRatio, &pStateMonitoring},
-	}
+	testWorkload2 := &workload.RDTWorkLoad{}
+	testWorkload2.Rdt.Cache.Max = &cachesValue
+	testWorkload2.Rdt.Cache.Min = &cachesValue
 
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
@@ -625,10 +616,10 @@ func Test_getSwiftWorkloadPolicyByURL(t *testing.T) {
 		httpmock.NewStringResponder(200, `{"policy":"gold"}`))
 
 	httpmock.RegisterResponder("GET", "http://10.237.214.102:8080/v1/AUTH_0ff337bec7d4415dbc60ffca09db14ef/RmdPolicies/custom2.json",
-		httpmock.NewStringResponder(200, `{"Cache":{"Max":4,"Min":4},"PState":{"Ratio":3.0,"Monitoring":"on"}}`))
+		httpmock.NewStringResponder(200, `{"rdt":{"cache":{"max":4,"min":4}}}`))
 
 	httpmock.RegisterResponder("GET", "http://10.237.214.102:8080/v1/AUTH_0ff337bec7d4415dbc60ffca09db14ef/RmdPolicies/error.json",
-		httpmock.NewStringResponder(200, `{"Cache":{"Max":4,"Min":`))
+		httpmock.NewStringResponder(200, `{"rdt":{"cache":{"max":4,"min":}}`))
 
 	type args struct {
 		workloadPolicyURL string
@@ -641,7 +632,7 @@ func Test_getSwiftWorkloadPolicyByURL(t *testing.T) {
 		endpointExistsInMap bool
 	}{
 		{"Correct Gold Policy case", args{"RmdPolicies/custom.json"}, testWorkload, false, true},
-		{"Correct Cache and PState Policy case", args{"RmdPolicies/custom2.json"}, testWorkload2, false, true},
+		{"Correct Cache Policy case", args{"RmdPolicies/custom2.json"}, testWorkload2, false, true},
 		{"Lack of Swift endpoint in map case", args{"RmdPolicies/custom.json"}, nil, true, false},
 		{"Malformed data case", args{"RmdPolicies/error.json"}, nil, true, true},
 	}

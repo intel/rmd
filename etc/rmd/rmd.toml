@@ -12,6 +12,12 @@ title = "RMD config"
 # clientauth = "challenge"  # can be "no, require, require_any, challenge_given, challenge", challenge means require and verify.
 # unixsock = "/var/run/rmd.sock"
 # sysresctrl = "/sys/fs/resctrl"
+# plugins = "" # comma separated list of enabled RMD plugins, for each plugin (ex. PLUGINX) appropriate config section (ex. [PLUGINX]) is needed
+# openstackenable = false # OpenStack integration activation, please read UserGuide for more information
+# dbValidatorInterval = 30 # interval for database validator that checks if process for created workload is still running
+
+[rdt]
+# mbaMode = "percentage" # MBA mode of operation, possible options are: "none", "percentage" (used by default) and "mbps"
 
 [debug]
 # enabled = false # allow rmd to run without any auth with http protocol
@@ -56,19 +62,11 @@ title = "RMD config"
 [pam]
 # service = "rmd"
 
-[pstate]
-## Simple plugin enable/disable flag
-enabled = true
-## path to loadable plugin file (.so library) with P-State implementation
-path = "/etc/rmd/plugins/pstatelib.so"
-## port number with plugin's http server (REST API)
-port = 8080
-
 [openstack]
 # Path below is optional. If not given then file will not be generated
 providerConfigPath = "/etc/nova/provider_config/rmd.yaml"
-amqpuri = "amqp://test:test@localhost:5672/" # URI to openstack amqp server, required to subscribe to nova notifications
+amqpuri = "amqp://user:password@127.0.0.1:5672/" # URI to openstack amqp server, required to subscribe to nova notifications, update with proper IP
 bindingKey = "versioned_notifications.info"
-keystoneUrl = "http://10.237.214.102/identity/v3/auth/tokens"  # URI to Keystone server, required to get token
-keystoneLogin = "admin"
-keystonePassword = "nimda"
+keystoneUrl = "http://127.0.0.1/identity/v3/auth/tokens"  # URI to Keystone server, required to get token, update with proper IP
+keystoneLogin = "login"
+keystonePassword = "password"

@@ -76,6 +76,13 @@ func TestBoltDB_ValidateAndCreate(t *testing.T) {
 	type args struct {
 		w *workload.RDTWorkLoad
 	}
+	var w1 workload.RDTWorkLoad
+	w1.ID = ""
+	w1.UUID = testuuid2
+	w1.CoreIDs = []string{"6"}
+	w1.Rdt.Cache.Max = &tempMax
+	w1.Rdt.Cache.Min = &tempMin
+
 	tests := []struct {
 		name        string
 		b           DB
@@ -91,19 +98,7 @@ func TestBoltDB_ValidateAndCreate(t *testing.T) {
 			CoreIDs: []string{"5"},
 			Policy:  "gold"},
 		}, false, false},
-		{"Proper workload with data", db, args{w: &workload.RDTWorkLoad{
-			ID:      "",
-			UUID:    testuuid2,
-			CoreIDs: []string{"6"},
-			Cache: struct {
-				Max *uint32 `json:"max,omitempty"`
-				Min *uint32 `json:"min,omitempty"`
-			}{
-				Max: &tempMax,
-				Min: &tempMin,
-			},
-		},
-		}, false, false},
+		{"Proper workload with data", db, args{w: &w1}, false, false},
 		{"Duplicated core ids", db, args{w: &workload.RDTWorkLoad{
 			ID:      "",
 			UUID:    testuuidf,
@@ -185,8 +180,8 @@ func TestBoltDB_CreateGetDeleteWorkload(t *testing.T) {
 	wrkld2.CoreIDs = []string{"2"}
 	cmax := uint32(4)
 	cmin := uint32(2)
-	wrkld2.Cache.Max = &cmax
-	wrkld2.Cache.Min = &cmin
+	wrkld2.Rdt.Cache.Max = &cmax
+	wrkld2.Rdt.Cache.Min = &cmin
 
 	err = db.CreateWorkload(&wrkld1)
 	if err != nil {

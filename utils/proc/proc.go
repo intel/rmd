@@ -30,6 +30,8 @@ var (
 	ResctrlPath string
 	// MbaInfoPath is the MBA path of
 	MbaInfoPath string
+	// Resctrl mounted with Mba Mbps
+	isMbaMbpsEnabled bool
 )
 
 // rdt_a, cat_l3, cdp_l3, cqm, cqm_llc, cqm_occup_llc
@@ -103,6 +105,21 @@ func IsCdpAvailable() (bool, error) {
 // IsMbaAvailable returns MBA feature available or not
 var IsMbaAvailable = func() (bool, error) {
 	return parseCPUInfoFile("mba")
+}
+
+// SetMbaMbpsMode stores MBA mode currently supported by rmd
+func SetMbaMbpsMode(flag bool) {
+	isMbaMbpsEnabled = flag
+}
+
+// GetMbaMbpsMode returns MBA mode currently supported by rmd
+func GetMbaMbpsMode() bool {
+	return isMbaMbpsEnabled
+}
+
+// IsL3CatAvailable returns L3 CAT feature available or not
+var IsL3CatAvailable = func() (bool, error) {
+	return parseCPUInfoFile("cat_l3")
 }
 
 // we can use shell command: "mount -l -t resctrl"

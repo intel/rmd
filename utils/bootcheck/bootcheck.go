@@ -67,7 +67,7 @@ func DBCheck() error {
 		return err
 	}
 
-	resaall := proxyclient.GetResAssociation()
+	resaall := proxyclient.GetResAssociation(nil)
 
 	wl, err := d.GetAllWorkload()
 	if err != nil {

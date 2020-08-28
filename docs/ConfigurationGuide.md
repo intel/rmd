@@ -32,6 +32,13 @@ There are some sample configuration files could be found [here](../etc/rmd).
 * clientcapath: support pem format, hard code that CAFile is ca.pem.
 * clientauth: TLS client authentication level, supported "no, require, require_any, challenge_given, challenge".
 * unixsock: unix socket path, default unix socket is not enabled.
+* sysresctrl: path to *resctrl* filesystem mount point (usualy /sys/fs/resctrl")
+* plugins: string containing comma separated list of loadable modules (RMD plugins), see [moduleX](#modulex-section) for details
+* dbValidatorInterval: Interval between workload database validation in seconds, by default it's 30s. Validator is used to periodically check db
+and remove all workloads related to system processes if all those processes doesn't exist anymore (so such workload will stay in db if at least one process still exists). Validator doesn't have impact on workloads related to CPU cores only.
+
+### [rdt] section
+* mbaMode: MBA (Memory Bandwidth Allocation) mode of operation supported by RMD, possible options are: "none", "percentage" and "mbps"
 
 ### [debug] section
 * enabled: true to enable debug mode, will listen as http protocol, only for testing.
@@ -87,16 +94,38 @@ RMD depends on authorization library [casbin](https://github.com/casbin/casbin) 
 This section will be used if `clientauth` is not set to `no`
 * service: the name of pam service
 
-### [pstate] section
-`pstate` section is optional and contains configuration for external P-State module. By default, when this section does not exists, P-State module is disabled (not loaded).
+### [pluginX] section
 
-* enabled: plugin enable/disable flag (allowed values: *true*, *false*)
-* path: path to loadable plugin file (.so library) with P-State implementation
-* port: port number with plugin's http server (REST API)
+RMD supports loadable modules (RMD plugins) that allows to easily extend RMD functionality. To use RMD plugin two steps are needed:
 
-To have P-State plugin active it is necessary to set *enabled* flag to true, provide path to .*so* library containing plugin implementation and set TCP port. If plugin library path not provided or library is not compatible (ex. no necessary symbols found) it will be rejected and RMD will immediately exit with proper error message.
+* add *plugin_name* to the list defined as *plugins* parameter in *default* section
+* add configuration section for this plugin with the same name as *plugin_name*
 
-P-State is composed of two parts: client side (implemented as RMD plugin) and server side (separate running process). Communication between these two sides is realized using TCP connection. Provided *port* parameter defines number of local TCP port on which P-State server side is listening.
+Example:
+
+```toml
+[default]
+# ...
+# standard RMD configuration
+# ...
+plugins = "plugin1,plugin2"
+
+[plugin1]
+path = "/path/to/compiled/plugin1.so"
+# plugin-specific params in format: name = value
+param1 = value1
+
+
+[plugin2]
+path = "/path/to/compiled/plugin2.so"
+# ... other plugin-specific params in format: name = value
+param1 = value1
+param2 = "string value"
+```
+
+For each configured plugin at least *path* parameter with a path to plugin's .so file is needed. Other plugin specific parameters (ex. address/port of some service, path to resource file) should be added according to plugin documentation.
+
+Please note that plugin name should match the name used in workload REST requests.
 
 ## policy.toml/policy.yaml
 This file contains policies for Cache plugin (catpolicy) and optional P-State plugin (pstatepolicy). Policies are pre-defined sets of paramters for different levels of service (different tiers). Currently 3 tiers are supported: `gold`, `silver` and `bronze`.
@@ -104,7 +133,7 @@ This file contains policies for Cache plugin (catpolicy) and optional P-State pl
 Policy (tier) can be selected during workload creation. If 'policy' given in workload description during creation (POST) or update (PATCH) request then manualy specified parameters
 are ignored.
 
-Polocy file path is configured in `rmd.toml` default section as `policypath` option. RMD currently supports yaml, toml as a policy file format.
+Policy file path is configured in `rmd.toml` default section as `policypath` option. RMD currently supports yaml, toml as a policy file format.
 
 ## cpu_map.toml
 

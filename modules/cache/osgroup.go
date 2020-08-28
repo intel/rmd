@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -8,6 +9,8 @@ import (
 	proxyclient "github.com/intel/rmd/internal/proxy/client"
 	"github.com/intel/rmd/modules/cache/config"
 	util "github.com/intel/rmd/utils/bitmap"
+	"github.com/intel/rmd/utils/pqos"
+	"github.com/intel/rmd/utils/proc"
 )
 
 var osGroupReserve = &Reserved{}
@@ -75,8 +78,29 @@ func SetOSGroup() error {
 		return err
 	}
 
-	allres := proxyclient.GetResAssociation()
-	osGroup := allres["."]
+	allres := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
+	osGroup, ok := allres[pqos.OSGroupCOS]
+	if !ok {
+		return errors.New("OSGroup not found")
+	}
+	// Removing "MB" from the Cache Schemata because it causes error while writing Mbps value
+	// Resctrl bug: approximates(takes the ceil) the given value. When MBA mbps max value given
+	// then it takes the ceil of the value and it goes off range. Hence deleting default MBA values.
+	_, ok = osGroup.CacheSchemata["MB"]
+	if ok {
+		// PQOS TODO MBA mode is now set in rmd.toml and verified by server
+		// so code below can be replaced with config flag checking
+		for _, v := range osGroup.CacheSchemata["MB"] {
+			if v.Mask > strconv.Itoa(MaxMBAPercentage) {
+				proc.SetMbaMbpsMode(true)
+			} else {
+				proc.SetMbaMbpsMode(false)
+			}
+		}
+		delete(osGroup.CacheSchemata, "MB")
+	} else {
+		proc.SetMbaMbpsMode(false)
+	}
 	originBM, err := BitmapsCPUWrapper(osGroup.CPUs)
 	if err != nil {
 		return err
@@ -88,27 +112,25 @@ func SetOSGroup() error {
 
 	level := GetLLC()
 	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
-	schemata, err := GetAvailableCacheSchemata(allres, []string{"infra", "."}, "none", cacheLevel)
+	schemata, err := GetAvailableCacheSchemata(allres, []string{pqos.InfraGoupCOS, pqos.OSGroupCOS}, "none", cacheLevel)
+
 	if err != nil {
 		return err
 	}
 
-	for i, v := range osGroup.Schemata[cacheLevel] {
+	for i, v := range osGroup.CacheSchemata[cacheLevel] {
 		cacheID := strconv.Itoa(int(v.ID))
-		if !reserve.CPUsPerNode[cacheID].IsEmpty() {
-			// OSGroup is the first Group, use the edge cache ways.
-			// FIXME , left or right cache ways, need to be check.
-			conf := config.NewOSConfig()
-			request, _ := BitmapsCacheWrapper(strconv.FormatUint(1<<conf.CacheWays-1, 16))
-			// NOTE , simpleness, brutal. Reset Cache for OS Group,
-			// even the cache is occupied by other group.
-			availableWays := schemata[cacheID].Or(request)
-			expectWays := availableWays.ToBinStrings()[0]
+		// OSGroup is the first Group, use the edge cache ways.
+		// FIXME , left or right cache ways, need to be check.
+		conf := config.NewOSConfig()
+		request, _ := BitmapsCacheWrapper(strconv.FormatUint(1<<conf.CacheWays-1, 16))
+		// NOTE , simpleness, brutal. Reset Cache for OS Group,
+		// even the cache is occupied by other group.
+		availableWays := schemata[cacheID].Or(request)
+		expectWays := availableWays.ToBinStrings()[0]
 
-			osGroup.Schemata[cacheLevel][i].Mask = strconv.FormatUint(1<<uint(len(expectWays))-1, 16)
-		} else {
-			osGroup.Schemata[cacheLevel][i].Mask = GetCosInfo().CbmMask
-		}
+		osGroup.CacheSchemata[cacheLevel][i].Mask = strconv.FormatUint(1<<uint(len(expectWays))-1, 16)
 	}
-	return proxyclient.Commit(osGroup, ".")
+
+	return proxyclient.Commit(osGroup, pqos.OSGroupCOS)
 }

@@ -27,6 +27,10 @@ import (
 const (
 	// SysCPUPath is patch of cpu device
 	SysCPUPath = "/sys/devices/system/cpu/"
+	// MaxMBAPercentage max value for MBA in percentage mode (just 100%)
+	MaxMBAPercentage = 100
+	// MaxMBAMbps max value for MBA in controller (mbps) mode
+	MaxMBAMbps = 4294967290
 )
 
 // SysCache is struct of cache of host
@@ -226,7 +230,7 @@ func (c *Infos) GetByLevel(level uint32) error {
 
 	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
 
-	allres := resctrl.GetResAssociation()
+	allres := resctrl.GetResAssociation(nil)
 	av, err := GetAvailableCacheSchemata(allres, []string{"infra"}, "none", cacheLevel)
 	if err != nil {
 		return rmderror.AppErrorf(http.StatusInternalServerError,
@@ -326,7 +330,7 @@ func (c *Infos) GetByLevel(level uint32) error {
 
 			cpuPools, _ := GetCPUPools()
 			var defaultCpus *util.Bitmap
-			if resAssoc, ok := resctrl.GetResAssociation()["."]; ok == true && resAssoc != nil {
+			if resAssoc, ok := resctrl.GetResAssociation(nil)["."]; ok == true && resAssoc != nil {
 				defaultCpus, _ = BitmapsCPUWrapper(resAssoc.CPUs)
 			}
 			if item, ok := cpuPools["all"][sc.ID]; ok {
@@ -344,22 +348,35 @@ func (c *Infos) GetByLevel(level uint32) error {
 			availPolicy := make(map[string]uint32)
 			for policyName, modules := range defPolicy {
 				//get max cache
-				iMax, err := strconv.Atoi(modules["cache"]["max"])
-				if err != nil {
-					log.Errorf("Error to get max cache. Reason: %s", err.Error())
+				iMaxAsInterface, ok := modules["cache"]["max"]
+				if !ok {
+					log.Error("Max cache doesn't exist in policy")
 					return rmderror.NewAppError(http.StatusInternalServerError,
-						"Error to get max cache", err)
+						"Max cache doesn't exist in policy", err)
+				}
+
+				iMax, ok := iMaxAsInterface.(int64)
+				if !ok {
+					log.Error("Failed to convert type for max cache")
+					return rmderror.NewAppError(http.StatusInternalServerError,
+						"Failed to convert type for max cache", err)
 				}
 
 				//get min cache
-				iMin, err := strconv.Atoi(modules["cache"]["min"])
-				if err != nil {
-					log.Errorf("Error to get min cache. Reason: %s", err.Error())
+				iMinAsInterface, ok := modules["cache"]["min"]
+				if !ok {
+					log.Error("Min cache doesn't exist in policy")
 					return rmderror.NewAppError(http.StatusInternalServerError,
-						"Error to get min cache", err)
+						"Min cache doesn't exist in policy", err)
+				}
+				iMin, ok := iMinAsInterface.(int64)
+				if !ok {
+					log.Error("Failed to convert type for min cache")
+					return rmderror.NewAppError(http.StatusInternalServerError,
+						"Failed to convert type for min cache", err)
 				}
 
-				err = getAvailablePolicyCount(availPolicy, iMax, iMin, allres, policyName, cacheLevel, sc.ID)
+				err = getAvailablePolicyCount(availPolicy, int(iMax), int(iMin), allres, policyName, cacheLevel, sc.ID)
 				if err != nil {
 					log.Errorf("Failed to get available policy count. Reason: %s", err.Error())
 					return rmderror.AppErrorf(http.StatusInternalServerError,
@@ -434,10 +451,15 @@ func GetCosInfo() CosInfo {
 		targetLev := strconv.FormatUint(uint64(level), 10)
 		cacheLevel := "l" + targetLev
 
-		catCosInfo.CbmMaskLen = util.CbmLen(rcinfo[cacheLevel].CbmMask)
-		catCosInfo.MinCbmBits = rcinfo[cacheLevel].MinCbmBits
-		catCosInfo.NumClosids = rcinfo[cacheLevel].NumClosids
-		catCosInfo.CbmMask = rcinfo[cacheLevel].CbmMask
+		if value, ok := rcinfo[cacheLevel]; ok {
+			log.Debugf("rcinfo[cacheLevel]: %v", value)
+			catCosInfo.CbmMaskLen = util.CbmLen(value.CbmMask)
+			catCosInfo.MinCbmBits = value.MinCbmBits
+			catCosInfo.NumClosids = value.NumClosids
+			catCosInfo.CbmMask = value.CbmMask
+		} else {
+			log.Warningf("Missing data for specified cache level: %v\n", cacheLevel)
+		}
 	})
 	return *catCosInfo
 }

@@ -4,6 +4,7 @@ package resctrl
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -17,13 +18,17 @@ import (
 	appConf "github.com/intel/rmd/utils/config"
 )
 
+// internal package variables
 var (
-	// The absolute path to the root of the Intel RDT "resource control" filesystem
 	intelRdtRootLock sync.Mutex
 	intelRdtRoot     string
+)
+
+// variables that can be accessed from the outside of package
+var (
 	// RdtInfo is global immutable variable
 	RdtInfo *map[string]*RdtCosInfo
-	// SysResctrl path
+	// SysResctrl is the absolute path to the root of the Intel RDT "resource control" filesystem
 	SysResctrl string
 )
 
@@ -83,19 +88,27 @@ type CacheCos struct {
 	Mask string
 }
 
+// MbaCos is the COS of a cache
+type MbaCos struct {
+	ID  uint8
+	Mba uint32
+}
+
 // ResAssociation is the resource group in resctrl
 // TODO  need to paser the tag for field setting.
 type ResAssociation struct {
-	Tasks    []string
-	CPUs     string
-	Schemata map[string][]CacheCos
+	Tasks         []string
+	CPUs          string
+	CacheSchemata map[string][]CacheCos
+	MbaSchemata   map[string][]MbaCos
 }
 
 // NewResAssociation gives new empty ResAssociation
 func NewResAssociation() *ResAssociation {
 	ra := &ResAssociation{}
 	ra.Tasks = []string{}
-	ra.Schemata = make(map[string][]CacheCos)
+	ra.CacheSchemata = make(map[string][]CacheCos)
+	ra.MbaSchemata = make(map[string][]MbaCos)
 	return ra
 }
 
@@ -113,7 +126,7 @@ func parserResAssociation(basepath string, ignore []string, ps map[string]*ResAs
 		case "Schemata":
 			strs := strings.Split(string(val), "\n")
 			if len(strs) > 1 {
-				res.Schemata = make(map[string][]CacheCos)
+				res.CacheSchemata = make(map[string][]CacheCos)
 			}
 			for _, data := range strs {
 				datas := strings.SplitN(data, ":", 2)
@@ -124,8 +137,8 @@ func parserResAssociation(basepath string, ignore []string, ps map[string]*ResAs
 				if key == "" {
 					return nil
 				}
-				if _, ok := res.Schemata[key]; !ok {
-					res.Schemata[key] = make([]CacheCos, 0, 10)
+				if _, ok := res.CacheSchemata[key]; !ok {
+					res.CacheSchemata[key] = make([]CacheCos, 0, 10)
 				}
 
 				coses := strings.Split(datas[1], ";")
@@ -133,7 +146,7 @@ func parserResAssociation(basepath string, ignore []string, ps map[string]*ResAs
 					infos := strings.SplitN(cos, "=", 2)
 					id, _ := strconv.ParseUint(infos[0], 10, 8)
 					cacheCos := &CacheCos{uint8(id), infos[1]}
-					res.Schemata[key] = append(res.Schemata[key], *cacheCos)
+					res.CacheSchemata[key] = append(res.CacheSchemata[key], *cacheCos)
 				}
 
 			}
@@ -189,44 +202,14 @@ func parserResAssociation(basepath string, ignore []string, ps map[string]*ResAs
 // That need cgo, please ref:
 // https://gist.github.com/ericchiang/ce0fdcac5659d0a80b38
 // now we can use lib/flock/flock.go
-func GetResAssociation() map[string]*ResAssociation {
+func GetResAssociation(availableCLOS []string) map[string]*ResAssociation {
 	ignore := []string{"info", "mon_data", "mon_groups"}
+	if availableCLOS != nil {
+		ignore = append(ignore, availableCLOS...)
+	}
 	ress := make(map[string]*ResAssociation)
 	filepath.Walk(SysResctrl, parserResAssociation(SysResctrl, ignore, ress))
 	return ress
-}
-
-// Commit resources in resctrl
-// FIXME Commit should be a transaction.
-// So we use taskFlow to guarantee the consistency.
-// Also we need a coarse granularity lock for IPC. We already has it.
-// Also we need a file lock for consistency among different processes. In plan.
-// After some test on taskFlow, we can remove these logic code and use taskFlow.
-// The taskFlow need a snapshot of all ResAssociation for the transaction.
-// It can be gotten by GetResAssociation.
-func Commit(r *ResAssociation, group string) error {
-	if !IsIntelRdtMounted() {
-		return fmt.Errorf("Can't apply this association, for resctrl is not mounted")
-	}
-
-	return taskFlow(group, r, GetResAssociation())
-}
-
-// CommitAll change all resource group
-// FIXME need to catch error
-func CommitAll(mRes map[string]*ResAssociation) error {
-	ress := GetResAssociation()
-	for name, res := range mRes {
-		Commit(res, name)
-	}
-
-	// Golang does not support set difference
-	for name := range ress {
-		if _, ok := mRes[name]; !ok && name != "." {
-			DestroyResAssociation(name)
-		}
-	}
-	return nil
 }
 
 // RdtCosInfo is from /sys/fs/resctrl/info
@@ -414,4 +397,69 @@ func RemoveTasks(tasks []string) error {
 		err = writeFile(SysResctrl, "tasks", v)
 	}
 	return err
+}
+
+// GetNumOfCLOS returns number COSes for L3 Cache, MBA or both depending on input params
+// If both L3 Cache and MBA selected function returns lower of two values
+func GetNumOfCLOS(getL3Clos, getMbaClos bool) (int, error) {
+
+	if !getL3Clos && !getMbaClos {
+		return 0, errors.New("Invalid input flags for GetNumOfCLOS")
+	}
+
+	var numL3Clos, numMbaClos int
+	if getL3Clos {
+		l3NumFile, err := os.Open(SysResctrl + "/info/L3/num_closids")
+		if err != nil {
+			return 0, err
+		}
+		defer l3NumFile.Close()
+
+		s := bufio.NewScanner(l3NumFile)
+		var text string
+		for s.Scan() {
+			text = s.Text()
+		}
+
+		numL3Clos, err = strconv.Atoi(text)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	if getMbaClos {
+		mbaNumFile, err := os.Open(SysResctrl + "/info/MB/num_closids")
+		if err != nil {
+			return 0, err
+		}
+		defer mbaNumFile.Close()
+
+		s := bufio.NewScanner(mbaNumFile)
+		var text string
+		for s.Scan() {
+			text = s.Text()
+		}
+
+		numMbaClos, err = strconv.Atoi(text)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// return only number of L3 CLOS
+	if getL3Clos && !getMbaClos {
+		return numL3Clos, nil
+	}
+
+	// return only number of MBA CLOS
+	if getL3Clos && !getMbaClos {
+		return numMbaClos, nil
+	}
+
+	// return lower of L3 CLOS/MBA CLOS
+	if numL3Clos < numMbaClos {
+		return numL3Clos, nil
+	}
+
+	return numMbaClos, nil
 }

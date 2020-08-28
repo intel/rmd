@@ -1,8 +1,16 @@
-  # file only for policy module test purposes
-  skylake:
-    gold:
-        cache:
-            max: 2
-            min: 2
-        pstate:
-            ratio: 1.5
+# file only for policy module test purposes
+skylake:
+  gold:
+    cache:
+      max: 2
+      min: 2
+    pstate:
+      ratio: 1.5
+broadwell:
+  gold:
+    cache:
+      max: 2
+      min: 2
+    pstate:
+      ratio: 1.5
+

@@ -12,11 +12,10 @@ import (
 	proxyclient "github.com/intel/rmd/internal/proxy/client"
 	"github.com/intel/rmd/modules/cache/config"
 	util "github.com/intel/rmd/utils/bitmap"
+	"github.com/intel/rmd/utils/pqos"
 	"github.com/intel/rmd/utils/proc"
 	"github.com/intel/rmd/utils/resctrl"
 )
-
-var groupName = "infra"
 
 var infraGroupReserve = &Reserved{}
 var infraOnce sync.Once
@@ -113,13 +112,20 @@ func SetInfraGroup() error {
 	level := GetLLC()
 	cacheLevel := "L" + strconv.FormatUint(uint64(level), 10)
 	ways := GetCosInfo().CbmMaskLen
-
-	allres := proxyclient.GetResAssociation()
-	infraGroup, ok := allres[groupName]
+	// pqos.GetAvailableCLOSes() returns list of CLOSes still available for use
+	allres := proxyclient.GetResAssociation(pqos.GetAvailableCLOSes())
+	infraGroup, ok := allres[pqos.InfraGoupCOS]
 	if !ok {
 		infraGroup = resctrl.NewResAssociation()
 		l := len(reserve.Schemata)
-		infraGroup.Schemata[cacheLevel] = make([]resctrl.CacheCos, l, l)
+		infraGroup.CacheSchemata[cacheLevel] = make([]resctrl.CacheCos, l, l)
+	}
+	// Removing "MB" from the Cache Schemata because it causes error while writing Mbps value
+	// Resctrl bug: approximates(takes the ceil) the given value. When MBA mbps max value given
+	// then it takes the ceil of the value and it goes off range. Hence deleting default MBA values.
+	_, ok = infraGroup.CacheSchemata["MB"]
+	if ok {
+		delete(infraGroup.CacheSchemata, "MB")
 	}
 	infraGroup.CPUs = reserve.AllCPUs.ToString()
 
@@ -135,7 +141,7 @@ func SetInfraGroup() error {
 			ID:   uint8(id),
 			Mask: mask,
 		}
-		infraGroup.Schemata[cacheLevel][id] = cc
+		infraGroup.CacheSchemata[cacheLevel][id] = cc
 	}
 
 	gt := getGlobTasks()
@@ -153,5 +159,5 @@ func SetInfraGroup() error {
 
 	infraGroup.Tasks = append(infraGroup.Tasks, tasks...)
 
-	return proxyclient.Commit(infraGroup, groupName)
+	return proxyclient.Commit(infraGroup, pqos.InfraGoupCOS)
 }
