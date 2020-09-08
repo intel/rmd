@@ -1,8 +1,8 @@
 OS = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH = $(shell uname -m)
-VERSION = $(shell cat VERSION | sed -e 's/^v//')
+RMD_VERSION = $(shell cat RMD_VERSION | sed -e 's/^v//')
 OUTPUT_DIR=build/$(OS)/$(ARCH)
-RMD_DIR = rmd-$(VERSION)
+RMD_DIR = rmd-$(RMD_VERSION)
 go-bin-deb = $(GOPATH)/bin/go-bin-deb
 go-bin-rpm = $(GOPATH)/bin/go-bin-rpm
 
