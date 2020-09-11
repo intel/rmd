@@ -8,7 +8,7 @@ __repo_path="github.com/intel/rmd"
 BUILD_DATE=${BUILD_DATE:-$( date +%Y%m%d-%H:%M:%S )}
 
 # Use version number hardcoded in file
-version=$(cat ./VERSION)
+version=$(cat ./RMD_VERSION)
 if [ -d ./.git ];
 then
 # Building from git working directory
