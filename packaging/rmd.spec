@@ -2,7 +2,7 @@ Name:           rmd
 Version:        0.3
 Release:        1%{?dist}
 Summary:        Resource Management Daemon-RMD
-License:        ASL 2.0 and GPLv2+ and  BSD and GPLv3+ and LGPLv2+ and LGPLv2.1+ and MIT and MPLv2.0 
+License:        ASL 2.0 and GPLv2+ and  BSD and LGPLv2+ and LGPLv2.1+ and MIT and MPLv2.0 
 URL:            https://github.com/intel/rmd
 Source0:        https://github.com/intel/rmd/archive/v0.3.tar.gz
 
@@ -18,8 +18,6 @@ BuildRequires:  pam-devel
 BuildRequires:  systemd
 #systemd-rpm-macros : LGPLv2+ and MIT and GPLv2+
 BuildRequires:  systemd-rpm-macros
-#go-rpm-macros : GPLv3+
-BuildRequires:  go-rpm-macros
 BuildRequires:  git-core
 #intel-cmt-cat-devel :BSD
 Requires:  intel-cmt-cat-devel >= 2.0.0-3
