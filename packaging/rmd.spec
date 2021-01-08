@@ -188,8 +188,7 @@ install -m 0644  %{_builddir}/%{name}-%{version}/docs/ConfigurationGuide.md %{bu
 %config(noreplace)  %{_sysconfdir}/rmd/*.yaml
 %config(noreplace)  %{_sysconfdir}/rmd/pam/test/rmd
 %config(noreplace)  %{_sysconfdir}/rmd/pam/rmd
-%doc README.md
-%doc %{_docdir}/%{name}
+%doc README.md CHANGELOG.md ./docs/UserGuide.md ./docs/Prerequisite.md ./docs/ConfigurationGuide.md
 %license LICENSE
 
 %{_unitdir}/%{name}.service
