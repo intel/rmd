@@ -44,7 +44,6 @@ package:
 	rpmdev-setuptree
 	cp packaging/rmd.spec $(HOME)/rpmbuild/SPECS
 	mv $(VERSION).tar.gz $(HOME)/rpmbuild/SOURCES
-	bash -c "./packaging/download_extra_packages.sh $(PWD)/packages/ $(HOME)/rpmbuild/SOURCES"
 	rpmbuild -ba $(HOME)/rpmbuild/SPECS/rmd.spec
 docker:
 	@docker build -t rmd .
