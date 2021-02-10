@@ -2,17 +2,14 @@ Name:           rmd
 Version:        0.3.1
 Release:        1%{?dist}
 Summary:        Resource Management Daemon-RMD
-License:        ASL 2.0 and GPLv2+ and  BSD and LGPLv2+ and LGPLv2.1+ and MIT and MPLv2.0 
+License:        ASL 2.0 and  BSD and MIT and MPLv2.0 
 URL:            https://github.com/intel/rmd
 Source0:        https://github.com/intel/rmd/archive/v0.3.1.tar.gz
 
 BuildRequires:  go
 BuildRequires:  make
-#pam-devel : BSD and GPLv2+
 BuildRequires:  pam-devel
-#systemd : LGPLv2.1+
 BuildRequires:  systemd
-#systemd-rpm-macros : LGPLv2+ and MIT and GPLv2+
 BuildRequires:  systemd-rpm-macros
 BuildRequires:  git-core
 #intel-cmt-cat-devel :BSD
@@ -85,8 +82,7 @@ Provides:      bundled(golang(github.com/etcd-io/bbolt)) = 1.3.3
 Provides:	bundled(golang(gopkg.in/yaml.v2)) = 2.3.0
 #github.com/streadway/amqp : BSD
 Provides:	bundled(golang(github.com/streadway/amqp)) = 1.0.0
-#github.com/golang/protobuf : BSD
-Provides:       bundled(golang(github.com/golang/protobuf)) = 0.0.0
+
 # this package does not support big endian arch so far,
 # and has been verified only on Intel platforms.
 # HW support is documented in https://github.com/intel/rmd/blob/master/docs/Prerequisite.md
