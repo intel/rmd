@@ -9,11 +9,9 @@ fi
 export GO111MODULE=on
 BASE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source $BASE/go-env
+
 #Copy only for git version. For package, this will be done from spec file
-if [ -d $BASE/../.git ];
-then
 cp -r $BASE/../etc/rmd /etc
-fi
 
 USER="rmd"
 useradd $USER || echo "User rmd already exists."

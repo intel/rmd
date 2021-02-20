@@ -30,6 +30,7 @@ require (
 	github.com/smartystreets/goconvey v1.6.4
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.0
+	github.com/streadway/amqp v1.0.0
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v0.0.0-20170721134547-ae643c872d2c // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
@@ -40,4 +41,5 @@ require (
 	golang.org/x/sys v0.0.0-20200519105757-fe76b779f299
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/gavv/httpexpect.v1 v1.0.0-20170328075429-d852bb8255b6
+	gopkg.in/yaml.v2 v2.3.0
 )
