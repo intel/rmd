@@ -149,20 +149,19 @@ func AllocateCLOS(res *resctrl.ResAssociation, name string) {
 		}
 	}
 
-	var s = []uint64{0, 0}
-	s[res.CacheSchemata["L3"][0].ID], _ = strconv.ParseUint(res.CacheSchemata["L3"][0].Mask, 16, 64)
-	s[res.CacheSchemata["L3"][1].ID], _ = strconv.ParseUint(res.CacheSchemata["L3"][1].Mask, 16, 64)
-	log.Debugf("AllocateCLOS: %x %x   clos: %v", s[0], s[1], clos)
-
+	var s = []uint64{}
 	var cacheToSet L3CacheStruct
 	cacheToSet.ClassID = clos
-	cacheToSet.WaysMask = s
 
 	socketsToSet := []int{}
 	for i := 0; i < GetNumOfSockets(); i++ {
 		// TODO PQOS Add here handling for WaysMask
 		socketsToSet = append(socketsToSet, i)
+		var waysmask uint64 = 0
+		waysmask, _ = strconv.ParseUint(res.CacheSchemata["L3"][i].Mask, 16, 64)
+		s = append(s, waysmask)
 	}
+	cacheToSet.WaysMask = s
 	cacheToSet.SocketsToSet = socketsToSet
 
 	err := AllocL3Cache(cacheToSet)
