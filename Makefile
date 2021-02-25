@@ -36,15 +36,6 @@ install: build
 	cp $(OUTPUT_DIR)/rmd $(DESTDIR)/usr/bin/rmd
 	cp $(OUTPUT_DIR)/gen_conf $(DESTDIR)/usr/bin/gen_conf
 	bash -c "./scripts/install.sh --skip-pam-userdb"
-package:
-	mkdir -p $(RMD_DIR)
-	rsync -avr --exclude=$(RMD_DIR),.git,build * $(RMD_DIR)
-	tar -zcvf $(VERSION).tar.gz $(RMD_DIR)/
-	rm -rf $(RMD_DIR)/
-	rpmdev-setuptree
-	cp packaging/rmd.spec $(HOME)/rpmbuild/SPECS
-	mv $(VERSION).tar.gz $(HOME)/rpmbuild/SOURCES
-	rpmbuild -ba $(HOME)/rpmbuild/SPECS/rmd.spec
 docker:
 	@docker build -t rmd .
 clean:

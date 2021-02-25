@@ -1,3 +1,5 @@
+%global goipath github.com/intel/rmd
+
 Name:           rmd
 Version:        0.3.1
 Release:        1%{?dist}
@@ -96,7 +98,11 @@ hardware resource management tasks on x86 platforms.
 %setup -q
 
 %build
-make %{?_smp_mflags}
+export GOPATH=${PWD}
+export PATH=${GOPATH}:${PATH}
+rsync -az --exclude=gopath/ ./ %{_builddir}/%{name}-%{version}
+cd %{_builddir}/%{name}-%{version}
+make %{?_smp_mflags} VERSION=${RMD_VERSION}
 
 %install
 
