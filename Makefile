@@ -1,5 +1,6 @@
 OS = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH = $(shell uname -m)
+VERSION = $(shell cat RMD_VERSION)
 RMD_VERSION = $(shell cat RMD_VERSION | sed -e 's/^v//')
 OUTPUT_DIR=build/$(OS)/$(ARCH)
 RMD_DIR = rmd-$(RMD_VERSION)
@@ -35,16 +36,6 @@ install: build
 	cp $(OUTPUT_DIR)/rmd $(DESTDIR)/usr/bin/rmd
 	cp $(OUTPUT_DIR)/gen_conf $(DESTDIR)/usr/bin/gen_conf
 	bash -c "./scripts/install.sh --skip-pam-userdb"
-package:
-	mkdir -p RMD_DIR
-	rsync -avr --exclude=$(RMD_DIR),.git,build * $(RMD_DIR)
-	tar -zcvf $(RMD_DIR).tar.gz $(RMD_DIR)/
-	rm -rf $(RMD_DIR)/
-	rpmdev-setuptree
-	cp packaging/rmd.spec $(HOME)/rpmbuild/SPECS
-	mv $(RMD_DIR).tar.gz $(HOME)/rpmbuild/SOURCES
-	bash -c "./packaging/download_extra_packages.sh $(PWD)/packages/ $(HOME)/rpmbuild/SOURCES"
-	rpmbuild -ba $(HOME)/rpmbuild/SPECS/rmd.spec
 docker:
 	@docker build -t rmd .
 clean:
