@@ -36,7 +36,7 @@ install: build
 	cp $(OUTPUT_DIR)/gen_conf $(DESTDIR)/usr/bin/gen_conf
 	bash -c "./scripts/install.sh --skip-pam-userdb"
 package:
-	mkdir -p RMD_DIR
+	mkdir -p $(RMD_DIR)
 	rsync -avr --exclude=$(RMD_DIR),.git,build * $(RMD_DIR)
 	tar -zcvf $(RMD_DIR).tar.gz $(RMD_DIR)/
 	rm -rf $(RMD_DIR)/
